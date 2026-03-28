@@ -164,15 +164,6 @@ export default function Index() {
             <p className="text-gray-800 text-sm leading-relaxed mb-5">
               Для тех поддержки пожалуйста перейдите в тг бота <strong>Семицвет AI</strong> и напишите команду <strong>/tex</strong>
             </p>
-            <a
-              href="https://t.me/@SemycvetAIBot"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-block w-full py-2.5 rounded-xl text-white text-sm font-medium transition-opacity hover:opacity-90"
-              style={{ background: "linear-gradient(135deg, #7B61FF, #A78BFA)" }}
-            >
-              Перейти в Telegram
-            </a>
             <button
               onClick={() => setShowSupportModal(false)}
               className="mt-3 text-xs text-gray-400 hover:text-gray-600 transition-colors"
