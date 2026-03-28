@@ -138,6 +138,16 @@ export default function Index() {
       className="min-h-screen bg-white flex flex-col"
       style={{ fontFamily: "'Golos Text', sans-serif" }}
     >
+      <a
+        href="https://t.me/@SemycvetAIBot"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="fixed bottom-5 left-5 z-50 w-12 h-12 rounded-full flex items-center justify-center shadow-lg transition-transform hover:scale-110 active:scale-95"
+        style={{ background: "linear-gradient(135deg, #7B61FF, #A78BFA)" }}
+        title="Связаться со мной"
+      >
+        <Icon name="MessageCircle" size={22} className="text-white" />
+      </a>
       {/* Header */}
       <header className="sticky top-0 z-10 bg-white/95 backdrop-blur border-b border-gray-100">
         <div className="max-w-2xl mx-auto px-4 py-3 flex items-center gap-3">
