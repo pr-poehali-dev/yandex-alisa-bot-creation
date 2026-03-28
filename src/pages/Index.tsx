@@ -143,7 +143,7 @@ export default function Index() {
         <div className="max-w-2xl mx-auto px-4 py-3 flex items-center gap-3">
           <AliceAvatar size={44} animated />
           <div className="flex-1 min-w-0">
-            <div className="font-semibold text-gray-900 text-base leading-tight">Алиса</div>
+            <div className="font-semibold text-gray-900 text-base leading-tight">Семицвет AI 2.0</div>
             <div className="text-xs font-medium" style={{ color: "#7B61FF" }}>
               Голосовой помощник
             </div>
