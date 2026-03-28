@@ -51,6 +51,15 @@
       "expectedStatus": 200,
       "expectedBody": {"ok": true},
       "bodyMatcher": "partial"
+    },
+    {
+      "name": "Broadcast notification - no access",
+      "method": "POST",
+      "path": "/?action=broadcast_notification",
+      "body": {"admin_username": "testauth99", "token": "fake", "text": "Test"},
+      "expectedStatus": 403,
+      "expectedBody": {"error": "Нет доступа"},
+      "bodyMatcher": "partial"
     }
   ]
 }

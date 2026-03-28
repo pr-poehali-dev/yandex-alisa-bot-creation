@@ -327,6 +327,30 @@ def handler(event: dict, context) -> dict:
             conn.commit()
             return resp(200, {"ok": True})
 
+        # ── Broadcast notification (admin only) ──
+        if action == "broadcast_notification" and method == "POST":
+            admin = body.get("admin_username", "").strip().lower()
+            token = body.get("token", "").strip()
+            text = body.get("text", "").strip()
+            notif_type = body.get("type", "announcement").strip()
+            if not admin or not token or not text:
+                return resp(400, {"error": "Неверные данные"})
+            if admin != "lavroviylist":
+                return resp(403, {"error": "Нет доступа"})
+            cur.execute("SELECT session_token FROM users WHERE username=%s", (admin,))
+            row = cur.fetchone()
+            if not row or row[0] != token:
+                return resp(401, {"error": "Неверный токен"})
+            cur.execute(
+                "INSERT INTO system_notifications (username, type, text, is_read, created_at) "
+                "SELECT username, %s, %s, FALSE, NOW() FROM users",
+                (notif_type, text)
+            )
+            cur.execute("SELECT COUNT(*) FROM users")
+            count = cur.fetchone()[0]
+            conn.commit()
+            return resp(200, {"ok": True, "sent_to": count})
+
         return resp(404, {"error": "Неизвестный action"})
 
     finally:
