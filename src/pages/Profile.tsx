@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Icon from "@/components/ui/icon";
 
+export const FRIENDS_API = "https://functions.poehali.dev/8b800673-e429-482e-b986-dcde22d05eaf";
 export const PROFILE_KEY = "semitsvet_profile";
 const CHATS_KEY = "semitsvet_chats";
 
@@ -99,15 +100,25 @@ export default function Profile() {
 
   const validateUsername = (v: string) => /^[a-z0-9_]{3,20}$/.test(v);
 
-  const saveProfile = () => {
+  const saveProfile = async () => {
     if (!editName.trim()) return;
     if (editUsername && !validateUsername(editUsername)) {
       setUsernameError("Только a-z, 0-9, _ (3–20 символов)");
       return;
     }
     setUsernameError("");
-    setProfile((p) => ({ ...p, name: editName.trim(), username: editUsername.trim().toLowerCase(), bio: editBio.trim() }));
+    const newProfile = { ...profile, name: editName.trim(), username: editUsername.trim().toLowerCase(), bio: editBio.trim() };
+    setProfile(newProfile);
     setIsEditing(false);
+    if (newProfile.username) {
+      try {
+        await fetch(`${FRIENDS_API}?action=save_profile`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username: newProfile.username, name: newProfile.name, bio: newProfile.bio, avatar: newProfile.avatar }),
+        });
+      } catch (_) { /* ignore */ }
+    }
   };
 
   const deleteChat = (id: string) => {
@@ -119,15 +130,31 @@ export default function Profile() {
 
   const deleteProfile = () => { setProfile(defaultProfile); setIsEditing(false); };
 
-  const sendFriendRequest = () => {
-    if (!friendUsername.trim()) return;
-    const requests: string[] = JSON.parse(localStorage.getItem("semitsvet_sent_requests") || "[]");
-    if (!requests.includes(friendUsername.trim())) {
-      requests.push(friendUsername.trim());
-      localStorage.setItem("semitsvet_sent_requests", JSON.stringify(requests));
+  const [friendError, setFriendError] = useState("");
+  const [friendLoading, setFriendLoading] = useState(false);
+
+  const sendFriendRequest = async () => {
+    if (!friendUsername.trim() || !profile.username) return;
+    setFriendError("");
+    setFriendLoading(true);
+    try {
+      const res = await fetch(`${FRIENDS_API}?action=send_request`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ from_username: profile.username, to_username: friendUsername.trim().toLowerCase() }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setFriendError(data.error || "Ошибка");
+      } else {
+        setFriendSent(true);
+        setTimeout(() => { setShowAddFriend(false); setFriendUsername(""); setFriendSent(false); setFriendError(""); }, 1500);
+      }
+    } catch (_) {
+      setFriendError("Нет соединения");
+    } finally {
+      setFriendLoading(false);
     }
-    setFriendSent(true);
-    setTimeout(() => { setShowAddFriend(false); setFriendUsername(""); setFriendSent(false); }, 1500);
   };
 
   return (
@@ -307,16 +334,21 @@ export default function Profile() {
               <>
                 <h3 className="text-base font-semibold text-gray-900 mb-1">Добавить друга</h3>
                 <p className="text-xs text-gray-400 mb-4">Введите юзернейм пользователя</p>
-                <div className="relative mb-4">
+                <div className="relative mb-2">
                   <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm text-gray-400">@</span>
-                  <input type="text" value={friendUsername} onChange={(e) => setFriendUsername(e.target.value)}
+                  <input type="text" value={friendUsername} onChange={(e) => { setFriendUsername(e.target.value); setFriendError(""); }}
                     placeholder="username" autoFocus
+                    onKeyDown={(e) => { if (e.key === "Enter") sendFriendRequest(); }}
                     className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-8 pr-4 py-2.5 text-sm text-gray-800 outline-none focus:border-purple-300 focus:bg-white transition-all" />
                 </div>
+                {friendError && <p className="text-xs text-red-400 mb-3">{friendError}</p>}
+                {!friendError && <div className="mb-3" />}
                 <div className="flex gap-2">
-                  <button onClick={() => setShowAddFriend(false)} className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-500 hover:bg-gray-50 transition-all">Отмена</button>
-                  <button onClick={sendFriendRequest} disabled={!friendUsername.trim()} className="flex-1 py-2.5 rounded-xl text-sm font-medium text-white disabled:opacity-40 active:scale-95 transition-all"
-                    style={{ background: "linear-gradient(135deg, #7B61FF, #A78BFA)" }}>Отправить</button>
+                  <button onClick={() => { setShowAddFriend(false); setFriendError(""); }} className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-500 hover:bg-gray-50 transition-all">Отмена</button>
+                  <button onClick={sendFriendRequest} disabled={!friendUsername.trim() || friendLoading} className="flex-1 py-2.5 rounded-xl text-sm font-medium text-white disabled:opacity-40 active:scale-95 transition-all"
+                    style={{ background: "linear-gradient(135deg, #7B61FF, #A78BFA)" }}>
+                    {friendLoading ? "..." : "Отправить"}
+                  </button>
                 </div>
               </>
             )}

@@ -1,0 +1,30 @@
+{
+  "tests": [
+    {
+      "name": "Save profile",
+      "method": "POST",
+      "path": "/?action=save_profile",
+      "body": {"username": "testuser1", "name": "Тест Юзер", "bio": "тест"},
+      "expectedStatus": 200,
+      "expectedBody": {"ok": true},
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Save profile again upsert",
+      "method": "POST",
+      "path": "/?action=save_profile",
+      "body": {"username": "testuser1", "name": "Тест Юзер Обновлён", "bio": "обновлён"},
+      "expectedStatus": 200,
+      "expectedBody": {"ok": true},
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Get unknown profile",
+      "method": "GET",
+      "path": "/?action=get_profile&username=no_such_user_xyz",
+      "expectedStatus": 404,
+      "expectedBody": {"error": "Пользователь не найден"},
+      "bodyMatcher": "partial"
+    }
+  ]
+}
