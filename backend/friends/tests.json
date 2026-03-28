@@ -26,6 +26,14 @@
       "expectedStatus": 401,
       "expectedBody": {"error": "Неверный пароль"},
       "bodyMatcher": "partial"
+    },
+    {
+      "name": "Get blocked list empty",
+      "method": "GET",
+      "path": "/?action=get_blocked&username=testauth99",
+      "expectedStatus": 200,
+      "expectedBody": {"blocked": []},
+      "bodyMatcher": "partial"
     }
   ]
 }

@@ -63,10 +63,13 @@ export default function Friends() {
 
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  const [tab, setTab] = useState<"friends" | "requests">("friends");
+  const [tab, setTab] = useState<"friends" | "requests" | "blocked">("friends");
   const [friends, setFriends] = useState<Friend[]>([]);
   const [requests, setRequests] = useState<FriendRequest[]>([]);
+  const [blocked, setBlocked] = useState<{ username: string; name: string; avatar: string | null }[]>([]);
   const [loading, setLoading] = useState(true);
+  const [blockConfirmReq, setBlockConfirmReq] = useState<FriendRequest | null>(null);
+  const [unblockConfirm, setUnblockConfirm] = useState<{ username: string; name: string; avatar: string | null } | null>(null);
 
   const [activeChat, setActiveChat] = useState<Friend | null>(null);
   const [messages, setMessages] = useState<FriendMessage[]>([]);
@@ -101,6 +104,12 @@ export default function Friends() {
     setFriends(data.friends || []);
   }, [me, api]);
 
+  const loadBlocked = useCallback(async () => {
+    if (!me) return;
+    const data = await api(`?action=get_blocked&username=${me}`);
+    setBlocked(data.blocked || []);
+  }, [me, api]);
+
   const loadRequests = useCallback(async () => {
     if (!me) return;
     const data = await api(`?action=get_requests&username=${me}`);
@@ -119,11 +128,10 @@ export default function Friends() {
 
   useEffect(() => {
     if (!me) { setLoading(false); return; }
-    Promise.all([loadFriends(), loadRequests()]).finally(() => setLoading(false));
-    // background poll for requests every 15s
+    Promise.all([loadFriends(), loadRequests(), loadBlocked()]).finally(() => setLoading(false));
     const interval = setInterval(loadRequests, 15000);
     return () => clearInterval(interval);
-  }, [me, loadFriends, loadRequests]);
+  }, [me, loadFriends, loadRequests, loadBlocked]);
 
   // Poll messages when in active chat
   useEffect(() => {
@@ -168,6 +176,26 @@ export default function Friends() {
       body: JSON.stringify({ from_username: req.username, to_username: me }),
     });
     loadRequests();
+  };
+
+  const blockUser = async (req: FriendRequest) => {
+    await api(`?action=block_user`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: me, blocked_username: req.username }),
+    });
+    setBlockConfirmReq(null);
+    await Promise.all([loadRequests(), loadFriends(), loadBlocked()]);
+  };
+
+  const unblockUser = async (u: { username: string; name: string; avatar: string | null }) => {
+    await api(`?action=unblock_user`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: me, blocked_username: u.username }),
+    });
+    setUnblockConfirm(null);
+    loadBlocked();
   };
 
   const removeFriend = async (friend: Friend) => {
@@ -350,7 +378,7 @@ export default function Friends() {
             Прочитать всё
           </button>
         )}
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <button onClick={() => setTab("friends")}
             className={`flex-1 py-2 rounded-xl text-sm font-medium transition-all ${tab === "friends" ? "text-white" : "border border-gray-200 text-gray-500 hover:bg-gray-50"}`}
             style={tab === "friends" ? { background: "linear-gradient(135deg, #7B61FF, #A78BFA)" } : undefined}>
@@ -363,6 +391,11 @@ export default function Friends() {
             {requests.length > 0 && (
               <span className="ml-1.5 inline-flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-bold bg-red-400 text-white">{requests.length}</span>
             )}
+          </button>
+          <button onClick={() => setTab("blocked")}
+            className={`flex-1 py-2 rounded-xl text-sm font-medium transition-all ${tab === "blocked" ? "text-white" : "border border-gray-200 text-gray-500 hover:bg-gray-50"}`}
+            style={tab === "blocked" ? { background: "linear-gradient(135deg, #ef4444, #f87171)" } : undefined}>
+            Блок {blocked.length > 0 && `(${blocked.length})`}
           </button>
         </div>
 
@@ -393,7 +426,7 @@ export default function Friends() {
               ))
             )}
           </div>
-        ) : (
+        ) : tab === "requests" ? (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
             {requests.length === 0 ? (
               <div className="text-center py-10 px-4">
@@ -408,11 +441,14 @@ export default function Friends() {
                     <p className="font-semibold text-gray-900 text-sm">{req.name}</p>
                     <p className="text-xs text-gray-400">@{req.username}</p>
                   </div>
-                  <div className="flex gap-2 flex-shrink-0">
-                    <button onClick={() => declineRequest(req)} className="w-8 h-8 rounded-xl flex items-center justify-center border border-gray-200 hover:bg-red-50 transition-all">
+                  <div className="flex gap-1.5 flex-shrink-0">
+                    <button onClick={() => declineRequest(req)} title="Отклонить" className="w-8 h-8 rounded-xl flex items-center justify-center border border-gray-200 hover:bg-red-50 transition-all">
                       <Icon name="X" size={14} className="text-red-400" />
                     </button>
-                    <button onClick={() => acceptRequest(req)} className="w-8 h-8 rounded-xl flex items-center justify-center text-white transition-all active:scale-95"
+                    <button onClick={() => setBlockConfirmReq(req)} title="Заблокировать" className="w-8 h-8 rounded-xl flex items-center justify-center border border-orange-200 hover:bg-orange-50 transition-all">
+                      <Icon name="ShieldAlert" size={14} className="text-orange-400" />
+                    </button>
+                    <button onClick={() => acceptRequest(req)} title="Принять" className="w-8 h-8 rounded-xl flex items-center justify-center text-white transition-all active:scale-95"
                       style={{ background: "linear-gradient(135deg, #7B61FF, #A78BFA)" }}>
                       <Icon name="Check" size={14} />
                     </button>
@@ -421,10 +457,71 @@ export default function Friends() {
               ))
             )}
           </div>
-        )}
+        ) : tab === "blocked" ? (
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            {blocked.length === 0 ? (
+              <div className="text-center py-10 px-4">
+                <Icon name="ShieldCheck" size={40} className="text-gray-200 mx-auto mb-3" />
+                <p className="text-sm text-gray-400">Заблокированных нет</p>
+              </div>
+            ) : (
+              blocked.map((u, i) => (
+                <div key={u.username} className={`flex items-center gap-3 px-4 py-3 ${i < blocked.length - 1 ? "border-b border-gray-50" : ""}`}>
+                  <UserAvatar avatar={u.avatar} name={u.name} size={44} />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-gray-900 text-sm">{u.name}</p>
+                    <p className="text-xs text-gray-400">@{u.username}</p>
+                  </div>
+                  <button onClick={() => setUnblockConfirm(u)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-gray-200 text-xs text-gray-500 hover:bg-gray-50 transition-all">
+                    <Icon name="ShieldOff" size={13} />
+                    Разблокировать
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+        ) : null}
 
         <p className="text-center text-xs text-gray-300">Ваш юзернейм: @{me}</p>
       </div>
+
+      {/* Block confirm modal */}
+      {blockConfirmReq && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4" style={{ background: "rgba(0,0,0,0.4)" }} onClick={() => setBlockConfirmReq(null)}>
+          <div className="bg-white rounded-2xl p-6 max-w-xs w-full shadow-xl text-center" onClick={(e) => e.stopPropagation()}>
+            <div className="w-12 h-12 rounded-full bg-orange-50 flex items-center justify-center mx-auto mb-3">
+              <Icon name="ShieldAlert" size={22} className="text-orange-400" />
+            </div>
+            <p className="font-semibold text-gray-900 mb-1">Заблокировать?</p>
+            <p className="text-sm text-gray-400 mb-1"><span className="font-medium text-gray-700">{blockConfirmReq.name}</span></p>
+            <p className="text-xs text-gray-400 mb-5">Заявка будет отклонена, пользователь не сможет добавить вас в друзья</p>
+            <div className="flex gap-2">
+              <button onClick={() => setBlockConfirmReq(null)} className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-500">Отмена</button>
+              <button onClick={() => blockUser(blockConfirmReq)} className="flex-1 py-2.5 rounded-xl text-sm font-medium text-white" style={{ background: "linear-gradient(135deg, #f97316, #fb923c)" }}>
+                Заблокировать
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Unblock confirm modal */}
+      {unblockConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4" style={{ background: "rgba(0,0,0,0.4)" }} onClick={() => setUnblockConfirm(null)}>
+          <div className="bg-white rounded-2xl p-6 max-w-xs w-full shadow-xl text-center" onClick={(e) => e.stopPropagation()}>
+            <div className="w-12 h-12 rounded-full bg-green-50 flex items-center justify-center mx-auto mb-3">
+              <Icon name="ShieldOff" size={22} className="text-green-400" />
+            </div>
+            <p className="font-semibold text-gray-900 mb-1">Разблокировать?</p>
+            <p className="text-sm text-gray-400 mb-5"><span className="font-medium text-gray-700">{unblockConfirm.name}</span> снова сможет отправлять вам заявки</p>
+            <div className="flex gap-2">
+              <button onClick={() => setUnblockConfirm(null)} className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-500">Отмена</button>
+              <button onClick={() => unblockUser(unblockConfirm)} className="flex-1 py-2.5 rounded-xl bg-green-400 text-sm font-medium text-white">Разблокировать</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

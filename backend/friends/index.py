@@ -139,6 +139,45 @@ def handler(event: dict, context) -> dict:
                 return resp(404, {"error": "Пользователь не найден"})
             return resp(200, {"username": row[0], "name": row[1], "bio": row[2], "avatar": row[3]})
 
+        # ── Block user ──
+        if action == "block_user" and method == "POST":
+            blocker = body.get("username", "").strip().lower()
+            blocked = body.get("blocked_username", "").strip().lower()
+            if not blocker or not blocked or blocker == blocked:
+                return resp(400, {"error": "Неверные данные"})
+            cur.execute(
+                "INSERT INTO blocked_users (blocker, blocked) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+                (blocker, blocked)
+            )
+            # also remove friend request and friendship
+            cur.execute("DELETE FROM friend_requests WHERE (from_username=%s AND to_username=%s) OR (from_username=%s AND to_username=%s)", (blocker, blocked, blocked, blocker))
+            a, b = sorted([blocker, blocked])
+            cur.execute("DELETE FROM friendships WHERE username_a=%s AND username_b=%s", (a, b))
+            conn.commit()
+            return resp(200, {"ok": True})
+
+        # ── Unblock user ──
+        if action == "unblock_user" and method == "POST":
+            blocker = body.get("username", "").strip().lower()
+            blocked = body.get("blocked_username", "").strip().lower()
+            if not blocker or not blocked:
+                return resp(400, {"error": "Неверные данные"})
+            cur.execute("DELETE FROM blocked_users WHERE blocker=%s AND blocked=%s", (blocker, blocked))
+            conn.commit()
+            return resp(200, {"ok": True})
+
+        # ── Get blocked list ──
+        if action == "get_blocked" and method == "GET":
+            username = params.get("username", "").strip().lower()
+            cur.execute(
+                "SELECT b.blocked, u.name, u.avatar FROM blocked_users b "
+                "JOIN users u ON u.username = b.blocked "
+                "WHERE b.blocker=%s ORDER BY b.created_at DESC",
+                (username,)
+            )
+            rows = cur.fetchall()
+            return resp(200, {"blocked": [{"username": r[0], "name": r[1], "avatar": r[2]} for r in rows]})
+
         # ── Send friend request ──
         if action == "send_request" and method == "POST":
             from_u = body.get("from_username", "").strip().lower()
@@ -148,6 +187,13 @@ def handler(event: dict, context) -> dict:
             cur.execute("SELECT 1 FROM users WHERE username=%s", (to_u,))
             if not cur.fetchone():
                 return resp(404, {"error": "Пользователь не найден"})
+            # check block
+            cur.execute(
+                "SELECT 1 FROM blocked_users WHERE (blocker=%s AND blocked=%s) OR (blocker=%s AND blocked=%s)",
+                (from_u, to_u, to_u, from_u)
+            )
+            if cur.fetchone():
+                return resp(403, {"error": "Нельзя отправить заявку этому пользователю"})
             # check already friends
             cur.execute(
                 "SELECT 1 FROM friendships WHERE (username_a=%s AND username_b=%s) OR (username_a=%s AND username_b=%s)",
