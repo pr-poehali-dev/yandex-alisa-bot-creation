@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Icon from "@/components/ui/icon";
+import { NAV_TABS } from "@/pages/Profile";
 
 export interface CustomPhrase {
   id: string;
@@ -101,30 +102,7 @@ export default function Settings() {
           </div>
         </div>
 
-        {/* Nav tabs */}
-        <div className="max-w-2xl mx-auto px-4 pb-3 flex gap-2">
-          <button
-            onClick={() => navigate("/")}
-            className="flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-sm font-medium border border-gray-200 text-gray-500 hover:bg-gray-50 transition-all"
-          >
-            <Icon name="MessageCircle" size={16} />
-            Чат
-          </button>
-          <button
-            className="flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-sm font-medium transition-all text-white"
-            style={{ background: "linear-gradient(135deg, #7B61FF, #A78BFA)" }}
-          >
-            <Icon name="Settings" size={16} />
-            Настройки
-          </button>
-          <button
-            onClick={() => navigate("/profile")}
-            className="flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-sm font-medium border border-gray-200 text-gray-500 hover:bg-gray-50 transition-all"
-          >
-            <Icon name="User" size={16} />
-            Профиль
-          </button>
-        </div>
+        {NAV_TABS(navigate, "/settings")}
       </header>
 
       {/* Content */}
