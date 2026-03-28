@@ -93,6 +93,7 @@ export default function Index() {
   const [isTyping, setIsTyping] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(true);
   const [showSupportModal, setShowSupportModal] = useState(false);
+  const [showInfoModal, setShowInfoModal] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -217,9 +218,9 @@ export default function Index() {
               Семицвет AI может ошибаться. Проверяйте важную информацию.
             </p>
             <button
-              onClick={() => setShowSupportModal(true)}
+              onClick={() => setShowInfoModal(true)}
               className="flex-shrink-0 w-4 h-4 rounded-full border border-gray-300 flex items-center justify-center text-gray-400 hover:border-purple-400 hover:text-purple-400 transition-colors"
-              title="Поддержка"
+              title="О боте"
             >
               <Icon name="Info" size={10} />
             </button>
@@ -302,6 +303,32 @@ export default function Index() {
                 </button>
               ))}
             </div>
+          </div>
+        </div>
+      )}
+
+      {showInfoModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center px-4"
+          style={{ background: "rgba(0,0,0,0.4)" }}
+          onClick={() => setShowInfoModal(false)}
+        >
+          <div
+            className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl text-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4" style={{ background: "linear-gradient(135deg, #7B61FF, #A78BFA)" }}>
+              <Icon name="Sparkles" size={24} className="text-white" />
+            </div>
+            <p className="text-gray-800 text-sm leading-relaxed mb-5">
+              Вас приветствует <strong>Семицвет AI</strong>, от разработчика <strong>Lavrov1yList</strong>. Спасибо если пользуетесь ботом!
+            </p>
+            <button
+              onClick={() => setShowInfoModal(false)}
+              className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              Закрыть
+            </button>
           </div>
         </div>
       )}
