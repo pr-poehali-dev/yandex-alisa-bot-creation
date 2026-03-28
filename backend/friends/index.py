@@ -77,10 +77,12 @@ def handler(event: dict, context) -> dict:
             if not username or not password:
                 return resp(400, {"error": "Введите юзернейм и пароль"})
             pw_hash = hash_password(password)
-            cur.execute("SELECT username, name, bio, avatar, password_hash FROM users WHERE username=%s", (username,))
+            cur.execute("SELECT username, name, bio, avatar, password_hash, is_banned FROM users WHERE username=%s", (username,))
             row = cur.fetchone()
             if not row:
                 return resp(404, {"error": "Пользователь не найден"})
+            if row[5]:
+                return resp(403, {"error": "Аккаунт заблокирован"})
             if row[4] != pw_hash:
                 return resp(401, {"error": "Неверный пароль"})
             token = make_token()
@@ -350,6 +352,29 @@ def handler(event: dict, context) -> dict:
             count = cur.fetchone()[0]
             conn.commit()
             return resp(200, {"ok": True, "sent_to": count})
+
+        # ── Admin ban / unban ──
+        if action in ("admin_ban", "admin_unban") and method == "POST":
+            admin = body.get("admin_username", "").strip().lower()
+            token = body.get("token", "").strip()
+            target = body.get("target_username", "").strip().lower()
+            if not admin or not token or not target:
+                return resp(400, {"error": "Неверные данные"})
+            if admin != "lavroviylist":
+                return resp(403, {"error": "Нет доступа"})
+            cur.execute("SELECT session_token FROM users WHERE username=%s", (admin,))
+            row = cur.fetchone()
+            if not row or row[0] != token:
+                return resp(401, {"error": "Неверный токен"})
+            cur.execute("SELECT id FROM users WHERE username=%s", (target,))
+            if not cur.fetchone():
+                return resp(404, {"error": "Пользователь не найден"})
+            ban_val = action == "admin_ban"
+            cur.execute("UPDATE users SET is_banned=%s WHERE username=%s", (ban_val, target))
+            if ban_val:
+                cur.execute("UPDATE users SET session_token=NULL WHERE username=%s", (target,))
+            conn.commit()
+            return resp(200, {"ok": True})
 
         return resp(404, {"error": "Неизвестный action"})
 

@@ -132,6 +132,49 @@ export default function Profile() {
   const [friendLoading, setFriendLoading] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
+  // ── admin panel ──
+  const [showAdmin, setShowAdmin] = useState(false);
+  const [adminTab, setAdminTab] = useState<"broadcast" | "ban" | "unban">("broadcast");
+  const [adminText, setAdminText] = useState("");
+  const [adminMsgType, setAdminMsgType] = useState("announcement");
+  const [adminTarget, setAdminTarget] = useState("");
+  const [adminLoading, setAdminLoading] = useState(false);
+  const [adminResult, setAdminResult] = useState<{ ok: boolean; message: string } | null>(null);
+
+  const isAdmin = profile.username === "lavroviylist";
+
+  async function adminBroadcast() {
+    if (!adminText.trim()) return;
+    setAdminLoading(true); setAdminResult(null);
+    try {
+      const res = await fetch(`${FRIENDS_API}?action=broadcast_notification`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ admin_username: session?.username, token: session?.token, text: adminText.trim(), type: adminMsgType }),
+      });
+      const data = await res.json();
+      setAdminResult(data.ok ? { ok: true, message: `Отправлено ${data.sent_to} пользователям` } : { ok: false, message: data.error || "Ошибка" });
+      if (data.ok) setAdminText("");
+    } catch { setAdminResult({ ok: false, message: "Ошибка сети" }); }
+    finally { setAdminLoading(false); }
+  }
+
+  async function adminBan(unban = false) {
+    if (!adminTarget.trim()) return;
+    setAdminLoading(true); setAdminResult(null);
+    try {
+      const res = await fetch(`${FRIENDS_API}?action=${unban ? "admin_unban" : "admin_ban"}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ admin_username: session?.username, token: session?.token, target_username: adminTarget.trim().toLowerCase() }),
+      });
+      const data = await res.json();
+      setAdminResult(data.ok ? { ok: true, message: unban ? "Пользователь разбанен" : "Пользователь забанен" } : { ok: false, message: data.error || "Ошибка" });
+      if (data.ok) setAdminTarget("");
+    } catch { setAdminResult({ ok: false, message: "Ошибка сети" }); }
+    finally { setAdminLoading(false); }
+  }
+
   const isLoggedIn = !!session?.token;
 
   useEffect(() => {
@@ -602,6 +645,102 @@ export default function Profile() {
             <div className="flex gap-2">
               <button onClick={() => setDeleteConfirmId(null)} className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-500">Отмена</button>
               <button onClick={() => deleteChat(deleteConfirmId)} className="flex-1 py-2.5 rounded-xl bg-red-400 text-sm font-medium text-white">Удалить</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Admin LP button */}
+      {isAdmin && (
+        <button
+          onClick={() => { setShowAdmin(true); setAdminResult(null); }}
+          className="fixed bottom-6 left-6 z-40 w-12 h-12 rounded-2xl shadow-lg text-white text-sm font-bold tracking-tight transition-all active:scale-95 hover:shadow-xl"
+          style={{ background: "linear-gradient(135deg, #1a1a2e, #16213e)" }}
+        >
+          LP
+        </button>
+      )}
+
+      {/* Admin panel modal */}
+      {showAdmin && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center px-4 pb-4 sm:items-center" style={{ background: "rgba(0,0,0,0.5)" }} onClick={() => setShowAdmin(false)}>
+          <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-gray-100"
+              style={{ background: "linear-gradient(135deg, #1a1a2e, #16213e)" }}>
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-white/10 flex items-center justify-center">
+                  <Icon name="ShieldCheck" size={14} className="text-white" />
+                </div>
+                <span className="font-bold text-white text-sm">Панель администратора</span>
+              </div>
+              <button onClick={() => setShowAdmin(false)} className="w-7 h-7 rounded-lg bg-white/10 flex items-center justify-center">
+                <Icon name="X" size={14} className="text-white" />
+              </button>
+            </div>
+
+            {/* Tabs */}
+            <div className="flex gap-1.5 px-4 pt-4">
+              {([
+                { key: "broadcast", icon: "Megaphone", label: "Сообщение" },
+                { key: "ban", icon: "ShieldX", label: "Забанить" },
+                { key: "unban", icon: "ShieldCheck", label: "Разбанить" },
+              ] as const).map((t) => (
+                <button key={t.key} onClick={() => { setAdminTab(t.key); setAdminResult(null); setAdminTarget(""); setAdminText(""); }}
+                  className="flex-1 flex flex-col items-center gap-1 py-2.5 rounded-xl text-xs font-medium transition-all"
+                  style={adminTab === t.key
+                    ? { background: "linear-gradient(135deg, #1a1a2e, #16213e)", color: "white" }
+                    : { border: "1px solid #e5e7eb", color: "#6b7280" }}>
+                  <Icon name={t.icon} size={15} />
+                  {t.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Content */}
+            <div className="px-4 py-4 flex flex-col gap-3">
+              {adminTab === "broadcast" && (
+                <>
+                  <select value={adminMsgType} onChange={(e) => setAdminMsgType(e.target.value)}
+                    className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-purple-300 transition-all">
+                    <option value="announcement">📢 Объявление</option>
+                    <option value="update">🆕 Обновление</option>
+                    <option value="warning">⚠️ Предупреждение</option>
+                    <option value="info">ℹ️ Информация</option>
+                  </select>
+                  <textarea value={adminText} onChange={(e) => setAdminText(e.target.value)}
+                    placeholder="Текст системного сообщения..." rows={3}
+                    className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-800 outline-none focus:border-purple-300 transition-all resize-none" />
+                  <button onClick={adminBroadcast} disabled={adminLoading || !adminText.trim()}
+                    className="w-full py-2.5 rounded-xl text-sm font-semibold text-white transition-all active:scale-95 disabled:opacity-50"
+                    style={{ background: "linear-gradient(135deg, #1a1a2e, #16213e)" }}>
+                    {adminLoading ? "Отправка..." : "Отправить всем"}
+                  </button>
+                </>
+              )}
+
+              {(adminTab === "ban" || adminTab === "unban") && (
+                <>
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm text-gray-400">@</span>
+                    <input type="text" value={adminTarget} onChange={(e) => setAdminTarget(e.target.value)}
+                      placeholder="username"
+                      onKeyDown={(e) => { if (e.key === "Enter") adminBan(adminTab === "unban"); }}
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-8 pr-4 py-2.5 text-sm text-gray-800 outline-none focus:border-purple-300 transition-all" />
+                  </div>
+                  <button onClick={() => adminBan(adminTab === "unban")} disabled={adminLoading || !adminTarget.trim()}
+                    className={`w-full py-2.5 rounded-xl text-sm font-semibold text-white transition-all active:scale-95 disabled:opacity-50 ${adminTab === "ban" ? "bg-red-400" : "bg-green-400"}`}>
+                    {adminLoading ? "..." : adminTab === "ban" ? "Забанить пользователя" : "Разбанить пользователя"}
+                  </button>
+                </>
+              )}
+
+              {adminResult && (
+                <div className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm ${adminResult.ok ? "bg-green-50 text-green-700" : "bg-red-50 text-red-600"}`}>
+                  <Icon name={adminResult.ok ? "CheckCircle" : "AlertCircle"} size={15} />
+                  {adminResult.message}
+                </div>
+              )}
             </div>
           </div>
         </div>
