@@ -1,7 +1,10 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import Icon from "@/components/ui/icon";
-import { NAV_TABS, PROFILE_KEY, FRIENDS_API } from "./Profile";
+import { NAV_TABS, PROFILE_KEY, FRIENDS_API, getFriendsBadge, setFriendsBadge, incFriendsBadge } from "./Profile";
+
+const SEEN_REQUESTS_KEY = "semitsvet_seen_requests";
+const SEEN_MSGS_KEY = "semitsvet_seen_msgs";
 
 interface Friend {
   username: string;
@@ -72,6 +75,21 @@ export default function Friends() {
 
   const [deleteConfirmFriend, setDeleteConfirmFriend] = useState<Friend | null>(null);
 
+  const [badge, setBadge] = useState(getFriendsBadge);
+
+  // sync badge from localStorage across tabs
+  useEffect(() => {
+    const handler = () => setBadge(getFriendsBadge());
+    window.addEventListener("friends-badge-update", handler);
+    return () => window.removeEventListener("friends-badge-update", handler);
+  }, []);
+
+  const clearBadge = () => { setFriendsBadge(0); setBadge(0); };
+
+  // track seen request usernames
+  const getSeenRequests = (): string[] => { try { return JSON.parse(localStorage.getItem(SEEN_REQUESTS_KEY) || "[]"); } catch { return []; } };
+  const getSeenMsgIds = (): number[] => { try { return JSON.parse(localStorage.getItem(SEEN_MSGS_KEY) || "[]"); } catch { return []; } };
+
   const api = useCallback(async (path: string, opts?: RequestInit) => {
     const res = await fetch(`${FRIENDS_API}${path}`, opts);
     return res.json();
@@ -86,12 +104,25 @@ export default function Friends() {
   const loadRequests = useCallback(async () => {
     if (!me) return;
     const data = await api(`?action=get_requests&username=${me}`);
-    setRequests(data.requests || []);
+    const incoming: FriendRequest[] = data.requests || [];
+    setRequests(incoming);
+    // detect new ones
+    const seen = getSeenRequests();
+    const newOnes = incoming.filter((r) => !seen.includes(r.username));
+    if (newOnes.length > 0) {
+      const allSeen = [...seen, ...newOnes.map((r) => r.username)];
+      localStorage.setItem(SEEN_REQUESTS_KEY, JSON.stringify(allSeen));
+      newOnes.forEach(() => incFriendsBadge());
+      setBadge(getFriendsBadge());
+    }
   }, [me, api]);
 
   useEffect(() => {
     if (!me) { setLoading(false); return; }
     Promise.all([loadFriends(), loadRequests()]).finally(() => setLoading(false));
+    // background poll for requests every 15s
+    const interval = setInterval(loadRequests, 15000);
+    return () => clearInterval(interval);
   }, [me, loadFriends, loadRequests]);
 
   // Poll messages when in active chat
@@ -99,7 +130,17 @@ export default function Friends() {
     if (!activeChat || !me) return;
     const load = async () => {
       const data = await api(`?action=get_messages&username=${me}&friend_username=${activeChat.username}`);
-      setMessages(data.messages || []);
+      const msgs: FriendMessage[] = data.messages || [];
+      setMessages(msgs);
+      // detect new incoming messages
+      const seen = getSeenMsgIds();
+      const newMsgs = msgs.filter((m) => m.from !== me && !seen.includes(m.id));
+      if (newMsgs.length > 0) {
+        const allSeen = [...seen, ...newMsgs.map((m) => m.id)];
+        localStorage.setItem(SEEN_MSGS_KEY, JSON.stringify(allSeen));
+        newMsgs.forEach(() => incFriendsBadge());
+        setBadge(getFriendsBadge());
+      }
     };
     load();
     const interval = setInterval(load, 3000);
@@ -166,7 +207,7 @@ export default function Friends() {
               <div className="text-xs font-medium" style={{ color: "#7B61FF" }}>Голосовой помощник</div>
             </div>
           </div>
-          {NAV_TABS(navigate, "/friends")}
+          {NAV_TABS(navigate, "/friends", badge)}
         </header>
         <div className="flex-1 flex items-center justify-center px-4">
           <div className="text-center">
@@ -188,7 +229,7 @@ export default function Friends() {
           <div className="max-w-2xl mx-auto px-4 py-3 flex items-center gap-3">
             <BotAvatar size={44} /><div className="flex-1"><div className="font-semibold text-gray-900">Семицвет AI 2.0</div></div>
           </div>
-          {NAV_TABS(navigate, "/friends")}
+          {NAV_TABS(navigate, "/friends", badge)}
         </header>
         <div className="flex-1 flex items-center justify-center px-4">
           <div className="text-center">
@@ -295,10 +336,20 @@ export default function Friends() {
             <span className="text-xs text-green-600 font-medium">онлайн</span>
           </div>
         </div>
-        {NAV_TABS(navigate, "/friends")}
+        {NAV_TABS(navigate, "/friends", badge)}
       </header>
 
       <div className="flex-1 max-w-2xl mx-auto w-full px-4 py-5 space-y-4">
+        {badge > 0 && (
+          <button
+            onClick={clearBadge}
+            className="w-full flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-medium border border-purple-200 bg-purple-50 transition-all hover:bg-purple-100 active:scale-95"
+            style={{ color: "#7B61FF" }}
+          >
+            <Icon name="CheckCheck" size={14} />
+            Прочитать всё
+          </button>
+        )}
         <div className="flex gap-2">
           <button onClick={() => setTab("friends")}
             className={`flex-1 py-2 rounded-xl text-sm font-medium transition-all ${tab === "friends" ? "text-white" : "border border-gray-200 text-gray-500 hover:bg-gray-50"}`}

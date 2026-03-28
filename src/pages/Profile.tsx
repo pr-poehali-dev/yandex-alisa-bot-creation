@@ -34,18 +34,34 @@ const BotAvatar = ({ size = 44 }: { size?: number }) => (
   </div>
 );
 
-export const NAV_TABS = (navigate: ReturnType<typeof useNavigate>, active: string) => (
+export const FRIENDS_BADGE_KEY = "semitsvet_friends_badge";
+
+export function getFriendsBadge(): number {
+  try { return parseInt(localStorage.getItem(FRIENDS_BADGE_KEY) || "0") || 0; }
+  catch { return 0; }
+}
+
+export function setFriendsBadge(n: number) {
+  localStorage.setItem(FRIENDS_BADGE_KEY, String(n));
+  window.dispatchEvent(new Event("friends-badge-update"));
+}
+
+export function incFriendsBadge() {
+  setFriendsBadge(getFriendsBadge() + 1);
+}
+
+export const NAV_TABS = (navigate: ReturnType<typeof useNavigate>, active: string, friendsBadge = 0) => (
   <div className="max-w-2xl mx-auto px-4 pb-3 flex gap-1.5 overflow-x-auto">
     {[
       { path: "/", icon: "MessageCircle", label: "Чат" },
       { path: "/settings", icon: "Settings", label: "Настройки" },
       { path: "/profile", icon: "User", label: "Профиль" },
-      { path: "/friends", icon: "Users", label: "Друзья" },
+      { path: "/friends", icon: "Users", label: "Друзья", badge: friendsBadge },
     ].map((tab) => (
       <button
         key={tab.path}
         onClick={() => navigate(tab.path)}
-        className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-medium transition-all whitespace-nowrap"
+        className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-medium transition-all whitespace-nowrap relative"
         style={
           active === tab.path
             ? { background: "linear-gradient(135deg, #7B61FF, #A78BFA)", color: "white" }
@@ -54,6 +70,9 @@ export const NAV_TABS = (navigate: ReturnType<typeof useNavigate>, active: strin
       >
         <Icon name={tab.icon} size={14} />
         {tab.label}
+        {"badge" in tab && tab.badge > 0 && (
+          <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 border-2 border-white" />
+        )}
       </button>
     ))}
   </div>
@@ -62,6 +81,12 @@ export const NAV_TABS = (navigate: ReturnType<typeof useNavigate>, active: strin
 export default function Profile() {
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [friendsBadge, setFriendsBadgeState] = useState(getFriendsBadge);
+  useEffect(() => {
+    const h = () => setFriendsBadgeState(getFriendsBadge());
+    window.addEventListener("friends-badge-update", h);
+    return () => window.removeEventListener("friends-badge-update", h);
+  }, []);
 
   const [profile, setProfile] = useState<UserProfile>(() => {
     try { return JSON.parse(localStorage.getItem(PROFILE_KEY) || "null") || defaultProfile; }
@@ -171,7 +196,7 @@ export default function Profile() {
             <span className="text-xs text-green-600 font-medium">онлайн</span>
           </div>
         </div>
-        {NAV_TABS(navigate, "/profile")}
+        {NAV_TABS(navigate, "/profile", friendsBadge)}
       </header>
 
       <div className="flex-1 max-w-2xl mx-auto w-full px-4 py-5 space-y-4">

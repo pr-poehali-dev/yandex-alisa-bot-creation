@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Icon from "@/components/ui/icon";
-import { NAV_TABS } from "@/pages/Profile";
+import { NAV_TABS, getFriendsBadge } from "@/pages/Profile";
 
 interface Message {
   id: number;
@@ -90,6 +90,12 @@ const TypingIndicator = () => (
 
 export default function Index() {
   const navigate = useNavigate();
+  const [friendsBadge, setFriendsBadge] = useState(getFriendsBadge);
+  useEffect(() => {
+    const h = () => setFriendsBadge(getFriendsBadge());
+    window.addEventListener("friends-badge-update", h);
+    return () => window.removeEventListener("friends-badge-update", h);
+  }, []);
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 1,
@@ -217,7 +223,7 @@ export default function Index() {
             <span className="text-xs text-green-600 font-medium">онлайн</span>
           </div>
         </div>
-        {NAV_TABS(navigate, "/")}
+        {NAV_TABS(navigate, "/", friendsBadge)}
       </header>
 
       {/* Input area */}

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Icon from "@/components/ui/icon";
-import { NAV_TABS } from "@/pages/Profile";
+import { NAV_TABS, getFriendsBadge } from "@/pages/Profile";
 
 export interface CustomPhrase {
   id: string;
@@ -35,6 +35,12 @@ const BotAvatar = ({ size = 44 }: { size?: number }) => (
 
 export default function Settings() {
   const navigate = useNavigate();
+  const [friendsBadge, setFriendsBadgeState] = useState(getFriendsBadge);
+  useEffect(() => {
+    const h = () => setFriendsBadgeState(getFriendsBadge());
+    window.addEventListener("friends-badge-update", h);
+    return () => window.removeEventListener("friends-badge-update", h);
+  }, []);
   const [botName, setBotName] = useState("Семицвет AI 2.0");
   const [notifications, setNotifications] = useState(true);
   const [soundEnabled, setSoundEnabled] = useState(false);
@@ -102,7 +108,7 @@ export default function Settings() {
           </div>
         </div>
 
-        {NAV_TABS(navigate, "/settings")}
+        {NAV_TABS(navigate, "/settings", friendsBadge)}
       </header>
 
       {/* Content */}
