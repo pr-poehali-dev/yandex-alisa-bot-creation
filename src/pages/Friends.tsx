@@ -210,6 +210,22 @@ export default function Friends() {
           </div>
         </header>
 
+        <div className="bg-white border-b border-gray-100 px-4 py-3">
+          <div className="max-w-2xl mx-auto flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-2xl px-4 py-2.5 focus-within:border-purple-300 focus-within:bg-white transition-all">
+            <input
+              type="text" value={chatInput} onChange={(e) => setChatInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
+              placeholder={`Написать ${activeChat.name}...`}
+              className="flex-1 bg-transparent text-sm text-gray-800 placeholder-gray-400 outline-none"
+            />
+            <button onClick={sendMessage} disabled={!chatInput.trim() || isTyping}
+              className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-all active:scale-95 disabled:opacity-40"
+              style={{ background: "linear-gradient(135deg, #7B61FF, #A78BFA)" }}>
+              <Icon name="Send" size={15} className="text-white" />
+            </button>
+          </div>
+        </div>
+
         <main className="flex-1 overflow-y-auto bg-gray-50/40 px-4 py-4">
           <div className="max-w-2xl mx-auto flex flex-col gap-3">
             {messages.length === 0 && (
@@ -244,22 +260,6 @@ export default function Friends() {
             <div ref={bottomRef} />
           </div>
         </main>
-
-        <div className="bg-white border-t border-gray-100 px-4 py-3">
-          <div className="max-w-2xl mx-auto flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-2xl px-4 py-2.5 focus-within:border-purple-300 focus-within:bg-white transition-all">
-            <input
-              type="text" value={chatInput} onChange={(e) => setChatInput(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
-              placeholder={`Написать ${activeChat.name}...`}
-              className="flex-1 bg-transparent text-sm text-gray-800 placeholder-gray-400 outline-none"
-            />
-            <button onClick={sendMessage} disabled={!chatInput.trim() || isTyping}
-              className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-all active:scale-95 disabled:opacity-40"
-              style={{ background: "linear-gradient(135deg, #7B61FF, #A78BFA)" }}>
-              <Icon name="Send" size={15} className="text-white" />
-            </button>
-          </div>
-        </div>
 
         {deleteConfirmId && (
           <div className="fixed inset-0 z-50 flex items-center justify-center px-4" style={{ background: "rgba(0,0,0,0.4)" }} onClick={() => setDeleteConfirmId(null)}>
