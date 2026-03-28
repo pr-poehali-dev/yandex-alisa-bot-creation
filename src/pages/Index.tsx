@@ -3,12 +3,12 @@ import Icon from "@/components/ui/icon";
 
 interface Message {
   id: number;
-  role: "user" | "alice";
+  role: "user" | "bot";
   text: string;
   time: string;
 }
 
-const ALICE_RESPONSES: Record<string, string> = {
+const BOT_RESPONSES: Record<string, string> = {
   default: "Я пока не подключён к настоящему ИИ, но скоро буду отвечать на любые вопросы! Напишите владельцу сайта, чтобы подключить меня.",
   привет: "Привет! Я Семицвет AI 2.0, ваш умный помощник. Чем могу помочь?",
   "как дела": "Отлично, спасибо что спросили! Готов помогать вам каждый день.",
@@ -23,17 +23,17 @@ const SUGGESTIONS = ["Кто ты?", "Что умеешь?", "Как дела?",
 
 function getBotResponse(text: string): string {
   const lower = text.toLowerCase().trim();
-  for (const key of Object.keys(ALICE_RESPONSES)) {
-    if (lower.includes(key)) return ALICE_RESPONSES[key];
+  for (const key of Object.keys(BOT_RESPONSES)) {
+    if (lower.includes(key)) return BOT_RESPONSES[key];
   }
-  return ALICE_RESPONSES.default;
+  return BOT_RESPONSES.default;
 }
 
 function getTime() {
   return new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
 }
 
-const AliceAvatar = ({ size = 48, animated = false }: { size?: number; animated?: boolean }) => (
+const BotAvatar = ({ size = 48, animated = false }: { size?: number; animated?: boolean }) => (
   <div className="relative flex-shrink-0" style={{ width: size, height: size }}>
     {animated && (
       <div
@@ -65,7 +65,7 @@ const AliceAvatar = ({ size = 48, animated = false }: { size?: number; animated?
 
 const TypingIndicator = () => (
   <div className="flex items-end gap-3 animate-fade-in">
-    <AliceAvatar size={36} />
+    <BotAvatar size={36} />
     <div className="bg-white border border-gray-100 rounded-2xl rounded-bl-sm px-4 py-3 shadow-sm">
       <div className="flex gap-1.5 items-center h-4">
         {[0, 1, 2].map((i) => (
@@ -84,7 +84,7 @@ export default function Index() {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 1,
-      role: "alice",
+      role: "bot",
       text: "Привет! Я помощник Семицвет AI 2.0 от разработчика Lavrov1yList. Задайте любой вопрос, и я постараюсь помочь.",
       time: getTime(),
     },
@@ -115,14 +115,14 @@ export default function Index() {
     setShowSuggestions(false);
 
     setTimeout(() => {
-      const aliceMsg: Message = {
+      const botMsg: Message = {
         id: Date.now() + 1,
-        role: "alice",
+        role: "bot",
         text: getBotResponse(text),
         time: getTime(),
       };
       setIsTyping(false);
-      setMessages((prev) => [...prev, aliceMsg]);
+      setMessages((prev) => [...prev, botMsg]);
     }, 900 + Math.random() * 600);
   };
 
@@ -141,7 +141,7 @@ export default function Index() {
       {/* Header */}
       <header className="sticky top-0 z-10 bg-white/95 backdrop-blur border-b border-gray-100">
         <div className="max-w-2xl mx-auto px-4 py-3 flex items-center gap-3">
-          <AliceAvatar size={44} animated />
+          <BotAvatar size={44} animated />
           <div className="flex-1 min-w-0">
             <div className="font-semibold text-gray-900 text-base leading-tight">Семицвет AI 2.0</div>
             <div className="text-xs font-medium" style={{ color: "#7B61FF" }}>
@@ -173,7 +173,7 @@ export default function Index() {
               }`}
               style={{ animationDelay: `${index * 0.05}s` }}
             >
-              {msg.role === "alice" && <AliceAvatar size={36} />}
+              {msg.role === "bot" && <BotAvatar size={36} />}
 
               <div
                 className={`max-w-[78%] px-4 py-3 rounded-2xl text-sm leading-relaxed ${
@@ -234,37 +234,30 @@ export default function Index() {
         </div>
       )}
 
-      {/* Input bar */}
-      <div className="sticky bottom-0 bg-white border-t border-gray-100">
+      {/* Input area */}
+      <div className="bg-white border-t border-gray-100">
         <div className="max-w-2xl mx-auto px-4 py-3">
-          <div
-            className="flex items-center gap-2 rounded-2xl px-4 py-2.5 border transition-all"
-            style={{ background: "#F8F8FB", borderColor: "#E5E7EB" }}
-          >
+          <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-2xl px-4 py-2.5 focus-within:border-purple-300 focus-within:bg-white transition-all">
             <input
               ref={inputRef}
+              type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Напишите сообщение..."
-              className="flex-1 bg-transparent outline-none text-sm text-gray-800 placeholder-gray-400"
-              style={{ fontFamily: "'Golos Text', sans-serif" }}
+              className="flex-1 bg-transparent text-sm text-gray-800 placeholder-gray-400 outline-none"
             />
             <button
               onClick={() => sendMessage(input)}
-              disabled={!input.trim()}
-              className="w-8 h-8 rounded-xl flex items-center justify-center transition-all active:scale-95 disabled:opacity-30"
-              style={
-                input.trim()
-                  ? { background: "linear-gradient(135deg, #7B61FF, #A78BFA)" }
-                  : { background: "#E5E7EB" }
-              }
+              disabled={!input.trim() || isTyping}
+              className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-all active:scale-95 disabled:opacity-40"
+              style={{ background: "linear-gradient(135deg, #7B61FF, #A78BFA)" }}
             >
-              <Icon name="Send" size={14} className="text-white" />
+              <Icon name="Send" size={15} className="text-white" style={{ marginLeft: 1 }} />
             </button>
           </div>
-          <p className="text-center text-[10px] text-gray-300 mt-2">
-            Алиса может ошибаться. Проверяйте важную информацию.
+          <p className="text-[10px] text-gray-300 text-center mt-2">
+            Семицвет AI может ошибаться. Проверяйте важную информацию.
           </p>
         </div>
       </div>
