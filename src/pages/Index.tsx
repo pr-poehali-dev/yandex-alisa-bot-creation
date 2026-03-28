@@ -212,9 +212,18 @@ export default function Index() {
               <Icon name="Send" size={15} className="text-white" style={{ marginLeft: 1 }} />
             </button>
           </div>
-          <p className="text-[10px] text-gray-300 text-center mt-2">
-            Семицвет AI может ошибаться. Проверяйте важную информацию.
-          </p>
+          <div className="flex items-center justify-center gap-2 mt-2">
+            <p className="text-[10px] text-gray-300">
+              Семицвет AI может ошибаться. Проверяйте важную информацию.
+            </p>
+            <button
+              onClick={() => setShowSupportModal(true)}
+              className="flex-shrink-0 w-4 h-4 rounded-full border border-gray-300 flex items-center justify-center text-gray-400 hover:border-purple-400 hover:text-purple-400 transition-colors"
+              title="Поддержка"
+            >
+              <Icon name="Info" size={10} />
+            </button>
+          </div>
         </div>
       </div>
 
