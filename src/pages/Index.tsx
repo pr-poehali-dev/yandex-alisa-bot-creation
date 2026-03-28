@@ -155,6 +155,34 @@ export default function Index() {
         </div>
       </header>
 
+      {/* Input area */}
+      <div className="bg-white border-b border-gray-100">
+        <div className="max-w-2xl mx-auto px-4 py-3">
+          <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-2xl px-4 py-2.5 focus-within:border-purple-300 focus-within:bg-white transition-all">
+            <input
+              ref={inputRef}
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Напишите сообщение..."
+              className="flex-1 bg-transparent text-sm text-gray-800 placeholder-gray-400 outline-none"
+            />
+            <button
+              onClick={() => sendMessage(input)}
+              disabled={!input.trim() || isTyping}
+              className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-all active:scale-95 disabled:opacity-40"
+              style={{ background: "linear-gradient(135deg, #7B61FF, #A78BFA)" }}
+            >
+              <Icon name="Send" size={15} className="text-white" style={{ marginLeft: 1 }} />
+            </button>
+          </div>
+          <p className="text-[10px] text-gray-300 text-center mt-2">
+            Семицвет AI может ошибаться. Проверяйте важную информацию.
+          </p>
+        </div>
+      </div>
+
       {/* Chat area */}
       <main className="flex-1 overflow-y-auto bg-gray-50/40">
         <div className="max-w-2xl mx-auto px-4 py-6 flex flex-col gap-4">
@@ -234,33 +262,6 @@ export default function Index() {
         </div>
       )}
 
-      {/* Input area */}
-      <div className="bg-white border-t border-gray-100">
-        <div className="max-w-2xl mx-auto px-4 py-3">
-          <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-2xl px-4 py-2.5 focus-within:border-purple-300 focus-within:bg-white transition-all">
-            <input
-              ref={inputRef}
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Напишите сообщение..."
-              className="flex-1 bg-transparent text-sm text-gray-800 placeholder-gray-400 outline-none"
-            />
-            <button
-              onClick={() => sendMessage(input)}
-              disabled={!input.trim() || isTyping}
-              className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-all active:scale-95 disabled:opacity-40"
-              style={{ background: "linear-gradient(135deg, #7B61FF, #A78BFA)" }}
-            >
-              <Icon name="Send" size={15} className="text-white" style={{ marginLeft: 1 }} />
-            </button>
-          </div>
-          <p className="text-[10px] text-gray-300 text-center mt-2">
-            Семицвет AI может ошибаться. Проверяйте важную информацию.
-          </p>
-        </div>
-      </div>
     </div>
   );
 }
