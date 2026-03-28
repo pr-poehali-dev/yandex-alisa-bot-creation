@@ -92,6 +92,7 @@ export default function Index() {
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(true);
+  const [showSupportModal, setShowSupportModal] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -138,16 +139,49 @@ export default function Index() {
       className="min-h-screen bg-white flex flex-col"
       style={{ fontFamily: "'Golos Text', sans-serif" }}
     >
-      <a
-        href="https://t.me/@SemycvetAIBot"
-        target="_blank"
-        rel="noopener noreferrer"
+      <button
+        onClick={() => setShowSupportModal(true)}
         className="fixed bottom-5 left-5 z-50 w-12 h-12 rounded-full flex items-center justify-center shadow-lg transition-transform hover:scale-110 active:scale-95"
         style={{ background: "linear-gradient(135deg, #7B61FF, #A78BFA)" }}
         title="Связаться со мной"
       >
         <Icon name="MessageCircle" size={22} className="text-white" />
-      </a>
+      </button>
+
+      {showSupportModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center px-4"
+          style={{ background: "rgba(0,0,0,0.4)" }}
+          onClick={() => setShowSupportModal(false)}
+        >
+          <div
+            className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl text-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4" style={{ background: "linear-gradient(135deg, #7B61FF, #A78BFA)" }}>
+              <Icon name="MessageCircle" size={24} className="text-white" />
+            </div>
+            <p className="text-gray-800 text-sm leading-relaxed mb-5">
+              Для тех поддержки пожалуйста перейдите в тг бота <strong>Семицвет AI</strong> и напишите команду <strong>/tex</strong>
+            </p>
+            <a
+              href="https://t.me/@SemycvetAIBot"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-block w-full py-2.5 rounded-xl text-white text-sm font-medium transition-opacity hover:opacity-90"
+              style={{ background: "linear-gradient(135deg, #7B61FF, #A78BFA)" }}
+            >
+              Перейти в Telegram
+            </a>
+            <button
+              onClick={() => setShowSupportModal(false)}
+              className="mt-3 text-xs text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              Закрыть
+            </button>
+          </div>
+        </div>
+      )}
       {/* Header */}
       <header className="sticky top-0 z-10 bg-white/95 backdrop-blur border-b border-gray-100">
         <div className="max-w-2xl mx-auto px-4 py-3 flex items-center gap-3">
