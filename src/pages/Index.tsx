@@ -24,6 +24,12 @@ const SUGGESTIONS = ["Кто ты?", "Что умеешь?", "Как дела?",
 
 function getBotResponse(text: string): string {
   const lower = text.toLowerCase().trim();
+  try {
+    const custom: { trigger: string; response: string }[] = JSON.parse(localStorage.getItem("semitsvet_custom_phrases") || "[]");
+    for (const p of custom) {
+      if (lower.includes(p.trigger.toLowerCase())) return p.response;
+    }
+  } catch (_) { /* ignore */ }
   for (const key of Object.keys(BOT_RESPONSES)) {
     if (lower.includes(key)) return BOT_RESPONSES[key];
   }

@@ -1,6 +1,14 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Icon from "@/components/ui/icon";
+
+export interface CustomPhrase {
+  id: string;
+  trigger: string;
+  response: string;
+}
+
+const STORAGE_KEY = "semitsvet_custom_phrases";
 
 const BotAvatar = ({ size = 44 }: { size?: number }) => (
   <div
@@ -31,6 +39,46 @@ export default function Settings() {
   const [soundEnabled, setSoundEnabled] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const [language, setLanguage] = useState("ru");
+
+  const [phrases, setPhrases] = useState<CustomPhrase[]>(() => {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]"); } catch { return []; }
+  });
+  const [showModal, setShowModal] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [formTrigger, setFormTrigger] = useState("");
+  const [formResponse, setFormResponse] = useState("");
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(phrases));
+  }, [phrases]);
+
+  const openAdd = () => {
+    setEditingId(null);
+    setFormTrigger("");
+    setFormResponse("");
+    setShowModal(true);
+  };
+
+  const openEdit = (p: CustomPhrase) => {
+    setEditingId(p.id);
+    setFormTrigger(p.trigger);
+    setFormResponse(p.response);
+    setShowModal(true);
+  };
+
+  const savePhrase = () => {
+    if (!formTrigger.trim() || !formResponse.trim()) return;
+    if (editingId) {
+      setPhrases((prev) => prev.map((p) => p.id === editingId ? { ...p, trigger: formTrigger.trim(), response: formResponse.trim() } : p));
+    } else {
+      setPhrases((prev) => [...prev, { id: Date.now().toString(), trigger: formTrigger.trim(), response: formResponse.trim() }]);
+    }
+    setShowModal(false);
+  };
+
+  const deletePhrase = (id: string) => {
+    setPhrases((prev) => prev.filter((p) => p.id !== id));
+  };
 
   return (
     <div
@@ -173,6 +221,48 @@ export default function Settings() {
           </div>
         </div>
 
+        {/* Custom phrases */}
+        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Свои фразы</h2>
+            <button
+              onClick={openAdd}
+              className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-xl text-white transition-all active:scale-95"
+              style={{ background: "linear-gradient(135deg, #7B61FF, #A78BFA)" }}
+            >
+              <Icon name="Plus" size={13} />
+              Добавить
+            </button>
+          </div>
+
+          {phrases.length === 0 ? (
+            <div className="text-center py-6">
+              <Icon name="MessageSquarePlus" size={32} className="text-gray-200 mx-auto mb-2" />
+              <p className="text-sm text-gray-400">Нет добавленных фраз</p>
+              <p className="text-xs text-gray-300 mt-1">Нажмите «Добавить», чтобы создать свой ответ</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {phrases.map((p) => (
+                <div key={p.id} className="flex items-start gap-3 p-3 rounded-xl bg-gray-50 border border-gray-100">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-purple-600 truncate">«{p.trigger}»</p>
+                    <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{p.response}</p>
+                  </div>
+                  <div className="flex gap-1 flex-shrink-0">
+                    <button onClick={() => openEdit(p)} className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-gray-200 transition-all">
+                      <Icon name="Pencil" size={13} className="text-gray-400" />
+                    </button>
+                    <button onClick={() => deletePhrase(p.id)} className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-red-50 transition-all">
+                      <Icon name="Trash2" size={13} className="text-red-400" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         {/* Clear chat */}
         <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
           <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">Данные</h2>
@@ -182,6 +272,63 @@ export default function Settings() {
         </div>
 
       </div>
+
+      {/* Modal */}
+      {showModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center px-4 pb-6 sm:items-center"
+          style={{ background: "rgba(0,0,0,0.4)" }}
+          onClick={() => setShowModal(false)}
+        >
+          <div
+            className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-base font-semibold text-gray-900 mb-4">
+              {editingId ? "Редактировать фразу" : "Новая фраза"}
+            </h3>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-gray-400 mb-1 block">Фраза пользователя</label>
+                <input
+                  type="text"
+                  value={formTrigger}
+                  onChange={(e) => setFormTrigger(e.target.value)}
+                  placeholder="Например: сколько стоит"
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-purple-300 focus:bg-white transition-all"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 mb-1 block">Ответ бота</label>
+                <textarea
+                  value={formResponse}
+                  onChange={(e) => setFormResponse(e.target.value)}
+                  placeholder="Что ответит бот..."
+                  rows={3}
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-purple-300 focus:bg-white transition-all resize-none"
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 mt-5">
+              <button
+                onClick={() => setShowModal(false)}
+                className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-500 hover:bg-gray-50 transition-all"
+              >
+                Отмена
+              </button>
+              <button
+                onClick={savePhrase}
+                disabled={!formTrigger.trim() || !formResponse.trim()}
+                className="flex-1 py-2.5 rounded-xl text-sm font-medium text-white transition-all disabled:opacity-40 active:scale-95"
+                style={{ background: "linear-gradient(135deg, #7B61FF, #A78BFA)" }}
+              >
+                Сохранить
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
