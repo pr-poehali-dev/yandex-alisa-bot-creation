@@ -34,6 +34,23 @@
       "expectedStatus": 200,
       "expectedBody": {"blocked": []},
       "bodyMatcher": "partial"
+    },
+    {
+      "name": "Get system notifications empty",
+      "method": "GET",
+      "path": "/?action=get_system_notifications&username=testauth99",
+      "expectedStatus": 200,
+      "expectedBody": {"notifications": []},
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Mark system notifications read",
+      "method": "POST",
+      "path": "/?action=mark_system_notifications_read",
+      "body": {"username": "testauth99"},
+      "expectedStatus": 200,
+      "expectedBody": {"ok": true},
+      "bodyMatcher": "partial"
     }
   ]
 }

@@ -230,6 +230,21 @@ def handler(event: dict, context) -> dict:
                 "INSERT INTO friendships (username_a, username_b) VALUES (%s, %s) ON CONFLICT DO NOTHING",
                 (a, b)
             )
+            # notify both users
+            cur.execute("SELECT name FROM users WHERE username=%s", (from_u,))
+            row_from = cur.fetchone()
+            cur.execute("SELECT name FROM users WHERE username=%s", (to_u,))
+            row_to = cur.fetchone()
+            name_from = row_from[0] if row_from else from_u
+            name_to = row_to[0] if row_to else to_u
+            cur.execute(
+                "INSERT INTO system_notifications (username, type, text) VALUES (%s, %s, %s)",
+                (from_u, "friend_accepted", f"{name_to} принял(а) вашу заявку в друзья")
+            )
+            cur.execute(
+                "INSERT INTO system_notifications (username, type, text) VALUES (%s, %s, %s)",
+                (to_u, "friend_accepted", f"Вы и {name_from} теперь друзья")
+            )
             conn.commit()
             return resp(200, {"ok": True})
 
@@ -290,6 +305,27 @@ def handler(event: dict, context) -> dict:
             )
             rows = cur.fetchall()
             return resp(200, {"messages": [{"id": r[0], "from": r[1], "text": r[2], "time": str(r[3])[11:16]} for r in rows]})
+
+        # ── Get system notifications ──
+        if action == "get_system_notifications" and method == "GET":
+            username = params.get("username", "").strip().lower()
+            cur.execute(
+                "SELECT id, type, text, is_read, created_at FROM system_notifications "
+                "WHERE username=%s ORDER BY created_at DESC LIMIT 50",
+                (username,)
+            )
+            rows = cur.fetchall()
+            return resp(200, {"notifications": [
+                {"id": r[0], "type": r[1], "text": r[2], "is_read": r[3], "created_at": str(r[4])}
+                for r in rows
+            ]})
+
+        # ── Mark system notifications read ──
+        if action == "mark_system_notifications_read" and method == "POST":
+            username = body.get("username", "").strip().lower()
+            cur.execute("UPDATE system_notifications SET is_read=TRUE WHERE username=%s AND is_read=FALSE", (username,))
+            conn.commit()
+            return resp(200, {"ok": True})
 
         return resp(404, {"error": "Неизвестный action"})
 

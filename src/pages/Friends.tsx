@@ -26,6 +26,14 @@ interface FriendMessage {
   time: string;
 }
 
+interface SystemNotification {
+  id: number;
+  type: string;
+  text: string;
+  is_read: boolean;
+  created_at: string;
+}
+
 function getProfile() {
   try { return JSON.parse(localStorage.getItem(PROFILE_KEY) || "null"); }
   catch { return null; }
@@ -63,7 +71,8 @@ export default function Friends() {
 
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  const [tab, setTab] = useState<"friends" | "requests" | "blocked">("friends");
+  const [tab, setTab] = useState<"friends" | "requests" | "blocked" | "system">("friends");
+  const [systemNotifs, setSystemNotifs] = useState<SystemNotification[]>([]);
   const [friends, setFriends] = useState<Friend[]>([]);
   const [requests, setRequests] = useState<FriendRequest[]>([]);
   const [blocked, setBlocked] = useState<{ username: string; name: string; avatar: string | null }[]>([]);
@@ -110,6 +119,12 @@ export default function Friends() {
     setBlocked(data.blocked || []);
   }, [me, api]);
 
+  const loadSystemNotifs = useCallback(async () => {
+    if (!me) return;
+    const data = await api(`?action=get_system_notifications&username=${me}`);
+    setSystemNotifs(data.notifications || []);
+  }, [me, api]);
+
   const loadRequests = useCallback(async () => {
     if (!me) return;
     const data = await api(`?action=get_requests&username=${me}`);
@@ -128,10 +143,10 @@ export default function Friends() {
 
   useEffect(() => {
     if (!me) { setLoading(false); return; }
-    Promise.all([loadFriends(), loadRequests(), loadBlocked()]).finally(() => setLoading(false));
+    Promise.all([loadFriends(), loadRequests(), loadBlocked(), loadSystemNotifs()]).finally(() => setLoading(false));
     const interval = setInterval(loadRequests, 15000);
     return () => clearInterval(interval);
-  }, [me, loadFriends, loadRequests, loadBlocked]);
+  }, [me, loadFriends, loadRequests, loadBlocked, loadSystemNotifs]);
 
   // Poll messages when in active chat
   useEffect(() => {
@@ -196,6 +211,20 @@ export default function Friends() {
     });
     setUnblockConfirm(null);
     loadBlocked();
+  };
+
+  const markSystemNotifsRead = async () => {
+    await api(`?action=mark_system_notifications_read`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: me }),
+    });
+    setSystemNotifs((prev) => prev.map((n) => ({ ...n, is_read: true })));
+  };
+
+  const switchTab = (t: typeof tab) => {
+    setTab(t);
+    if (t === "system") markSystemNotifsRead();
   };
 
   const removeFriend = async (friend: Friend) => {
@@ -379,12 +408,12 @@ export default function Friends() {
           </button>
         )}
         <div className="flex gap-2 flex-wrap">
-          <button onClick={() => setTab("friends")}
+          <button onClick={() => switchTab("friends")}
             className={`flex-1 py-2 rounded-xl text-sm font-medium transition-all ${tab === "friends" ? "text-white" : "border border-gray-200 text-gray-500 hover:bg-gray-50"}`}
             style={tab === "friends" ? { background: "linear-gradient(135deg, #7B61FF, #A78BFA)" } : undefined}>
             Друзья {friends.length > 0 && `(${friends.length})`}
           </button>
-          <button onClick={() => setTab("requests")}
+          <button onClick={() => switchTab("requests")}
             className={`flex-1 py-2 rounded-xl text-sm font-medium transition-all ${tab === "requests" ? "text-white" : "border border-gray-200 text-gray-500 hover:bg-gray-50"}`}
             style={tab === "requests" ? { background: "linear-gradient(135deg, #7B61FF, #A78BFA)" } : undefined}>
             Заявки
@@ -392,10 +421,18 @@ export default function Friends() {
               <span className="ml-1.5 inline-flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-bold bg-red-400 text-white">{requests.length}</span>
             )}
           </button>
-          <button onClick={() => setTab("blocked")}
+          <button onClick={() => switchTab("blocked")}
             className={`flex-1 py-2 rounded-xl text-sm font-medium transition-all ${tab === "blocked" ? "text-white" : "border border-gray-200 text-gray-500 hover:bg-gray-50"}`}
             style={tab === "blocked" ? { background: "linear-gradient(135deg, #ef4444, #f87171)" } : undefined}>
             Блок {blocked.length > 0 && `(${blocked.length})`}
+          </button>
+          <button onClick={() => switchTab("system")}
+            className={`flex-1 py-2 rounded-xl text-sm font-medium transition-all relative ${tab === "system" ? "text-white" : "border border-gray-200 text-gray-500 hover:bg-gray-50"}`}
+            style={tab === "system" ? { background: "linear-gradient(135deg, #22c55e, #4ade80)" } : undefined}>
+            Система
+            {systemNotifs.filter((n) => !n.is_read).length > 0 && (
+              <span className="ml-1.5 inline-flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-bold bg-green-400 text-white">{systemNotifs.filter((n) => !n.is_read).length}</span>
+            )}
           </button>
         </div>
 
@@ -477,6 +514,31 @@ export default function Friends() {
                     <Icon name="ShieldOff" size={13} />
                     Разблокировать
                   </button>
+                </div>
+              ))
+            )}
+          </div>
+        ) : tab === "system" ? (
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            {systemNotifs.length === 0 ? (
+              <div className="text-center py-10 px-4">
+                <Icon name="Bell" size={40} className="text-gray-200 mx-auto mb-3" />
+                <p className="text-sm text-gray-400">Системных уведомлений нет</p>
+              </div>
+            ) : (
+              systemNotifs.map((n, i) => (
+                <div key={n.id} className={`flex items-center gap-3 px-4 py-3 ${i < systemNotifs.length - 1 ? "border-b border-gray-50" : ""} ${n.is_read ? "" : "bg-green-50/60"}`}>
+                  <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0"
+                    style={{ background: "linear-gradient(135deg, #22c55e, #4ade80)" }}>
+                    <Icon name={n.type === "friend_accepted" ? "UserCheck" : "Bell"} size={16} className="text-white" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-gray-800">{n.text}</p>
+                    <p className="text-xs text-gray-400 mt-0.5">{n.created_at.slice(0, 16).replace("T", " ")}</p>
+                  </div>
+                  {!n.is_read && (
+                    <div className="w-2 h-2 rounded-full bg-green-400 flex-shrink-0" />
+                  )}
                 </div>
               ))
             )}
