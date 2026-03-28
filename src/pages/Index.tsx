@@ -143,6 +143,25 @@ export default function Index() {
     }
   };
 
+  const saveChat = () => {
+    const profile = JSON.parse(localStorage.getItem("semitsvet_profile") || "null");
+    if (!profile?.name) {
+      navigate("/profile");
+      return;
+    }
+    const chats = JSON.parse(localStorage.getItem("semitsvet_chats") || "[]");
+    const firstUserMsg = messages.find((m) => m.role === "user");
+    const title = firstUserMsg ? firstUserMsg.text.slice(0, 40) : "Переписка";
+    const newChat = {
+      id: Date.now().toString(),
+      title,
+      date: new Date().toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" }),
+      messages: messages.map(({ role, text, time }) => ({ role, text, time })),
+    };
+    localStorage.setItem("semitsvet_chats", JSON.stringify([newChat, ...chats]));
+    navigate("/profile");
+  };
+
   return (
     <div
       className="min-h-screen bg-white flex flex-col"
@@ -213,6 +232,13 @@ export default function Index() {
             <Icon name="Settings" size={16} />
             Настройки
           </button>
+          <button
+            onClick={() => navigate("/profile")}
+            className="flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-sm font-medium border border-gray-200 text-gray-500 hover:bg-gray-50 transition-all"
+          >
+            <Icon name="User" size={16} />
+            Профиль
+          </button>
         </div>
       </header>
 
@@ -238,17 +264,29 @@ export default function Index() {
               <Icon name="Send" size={15} className="text-white" style={{ marginLeft: 1 }} />
             </button>
           </div>
-          <div className="flex items-center justify-center gap-2 mt-2">
-            <p className="text-[10px] text-gray-300">
-              Семицвет AI может ошибаться. Проверяйте важную информацию.
-            </p>
-            <button
-              onClick={() => setShowInfoModal(true)}
-              className="flex-shrink-0 w-4 h-4 rounded-full border border-gray-300 flex items-center justify-center text-gray-400 hover:border-purple-400 hover:text-purple-400 transition-colors"
-              title="О боте"
-            >
-              <Icon name="Info" size={10} />
-            </button>
+          <div className="flex items-center justify-between gap-2 mt-2">
+            <div className="flex items-center gap-2">
+              <p className="text-[10px] text-gray-300">
+                Семицвет AI может ошибаться. Проверяйте важную информацию.
+              </p>
+              <button
+                onClick={() => setShowInfoModal(true)}
+                className="flex-shrink-0 w-4 h-4 rounded-full border border-gray-300 flex items-center justify-center text-gray-400 hover:border-purple-400 hover:text-purple-400 transition-colors"
+                title="О боте"
+              >
+                <Icon name="Info" size={10} />
+              </button>
+            </div>
+            {messages.length > 1 && (
+              <button
+                onClick={saveChat}
+                className="flex items-center gap-1 text-[10px] font-medium px-2 py-1 rounded-lg transition-all active:scale-95"
+                style={{ color: "#7B61FF" }}
+              >
+                <Icon name="Save" size={11} />
+                Сохранить
+              </button>
+            )}
           </div>
         </div>
       </div>

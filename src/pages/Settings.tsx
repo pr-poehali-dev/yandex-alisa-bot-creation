@@ -117,6 +117,13 @@ export default function Settings() {
             <Icon name="Settings" size={16} />
             Настройки
           </button>
+          <button
+            onClick={() => navigate("/profile")}
+            className="flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-sm font-medium border border-gray-200 text-gray-500 hover:bg-gray-50 transition-all"
+          >
+            <Icon name="User" size={16} />
+            Профиль
+          </button>
         </div>
       </header>
 
