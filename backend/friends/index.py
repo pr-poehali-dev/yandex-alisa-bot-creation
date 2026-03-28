@@ -1,6 +1,16 @@
 import json
 import os
+import hashlib
+import secrets
 import psycopg2
+
+
+def hash_password(password: str) -> str:
+    return hashlib.sha256(password.encode("utf-8")).hexdigest()
+
+
+def make_token() -> str:
+    return secrets.token_hex(32)
 
 def get_conn():
     return psycopg2.connect(os.environ["DATABASE_URL"])
@@ -37,7 +47,74 @@ def handler(event: dict, context) -> dict:
     cur = conn.cursor()
 
     try:
-        # ── Upsert profile ──
+        # ── Register ──
+        if action == "register" and method == "POST":
+            username = body.get("username", "").strip().lower()
+            name = body.get("name", "").strip()
+            bio = body.get("bio", "").strip()
+            avatar = body.get("avatar")
+            password = body.get("password", "")
+            if not username or not name or not password:
+                return resp(400, {"error": "username, name и password обязательны"})
+            if len(password) < 6:
+                return resp(400, {"error": "Пароль минимум 6 символов"})
+            cur.execute("SELECT 1 FROM users WHERE username=%s", (username,))
+            if cur.fetchone():
+                return resp(409, {"error": "Юзернейм уже занят"})
+            pw_hash = hash_password(password)
+            token = make_token()
+            cur.execute(
+                "INSERT INTO users (username, name, bio, avatar, password_hash, session_token) VALUES (%s,%s,%s,%s,%s,%s)",
+                (username, name, bio, avatar, pw_hash, token)
+            )
+            conn.commit()
+            return resp(200, {"ok": True, "token": token, "username": username, "name": name, "bio": bio, "avatar": avatar})
+
+        # ── Login ──
+        if action == "login" and method == "POST":
+            username = body.get("username", "").strip().lower()
+            password = body.get("password", "")
+            if not username or not password:
+                return resp(400, {"error": "Введите юзернейм и пароль"})
+            pw_hash = hash_password(password)
+            cur.execute("SELECT username, name, bio, avatar, password_hash FROM users WHERE username=%s", (username,))
+            row = cur.fetchone()
+            if not row:
+                return resp(404, {"error": "Пользователь не найден"})
+            if row[4] != pw_hash:
+                return resp(401, {"error": "Неверный пароль"})
+            token = make_token()
+            cur.execute("UPDATE users SET session_token=%s WHERE username=%s", (token, username))
+            conn.commit()
+            return resp(200, {"ok": True, "token": token, "username": row[0], "name": row[1], "bio": row[2], "avatar": row[3]})
+
+        # ── Verify session token ──
+        if action == "verify_token" and method == "POST":
+            username = body.get("username", "").strip().lower()
+            token = body.get("token", "")
+            if not username or not token:
+                return resp(400, {"error": "Неверные данные"})
+            cur.execute("SELECT username, name, bio, avatar FROM users WHERE username=%s AND session_token=%s", (username, token))
+            row = cur.fetchone()
+            if not row:
+                return resp(401, {"error": "Сессия недействительна"})
+            return resp(200, {"ok": True, "username": row[0], "name": row[1], "bio": row[2], "avatar": row[3]})
+
+        # ── Update profile (requires token) ──
+        if action == "update_profile" and method == "POST":
+            username = body.get("username", "").strip().lower()
+            token = body.get("token", "")
+            name = body.get("name", "").strip()
+            bio = body.get("bio", "").strip()
+            avatar = body.get("avatar")
+            cur.execute("SELECT 1 FROM users WHERE username=%s AND session_token=%s", (username, token))
+            if not cur.fetchone():
+                return resp(401, {"error": "Нет доступа"})
+            cur.execute("UPDATE users SET name=%s, bio=%s, avatar=%s WHERE username=%s", (name, bio, avatar, username))
+            conn.commit()
+            return resp(200, {"ok": True})
+
+        # ── Upsert profile (legacy, no password) ──
         if action == "save_profile" and method == "POST":
             username = body.get("username", "").strip().lower()
             name = body.get("name", "").strip()

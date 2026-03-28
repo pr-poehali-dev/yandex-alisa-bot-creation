@@ -1,29 +1,30 @@
 {
   "tests": [
     {
-      "name": "Save profile",
+      "name": "Register new user",
       "method": "POST",
-      "path": "/?action=save_profile",
-      "body": {"username": "testuser1", "name": "Тест Юзер", "bio": "тест"},
+      "path": "/?action=register",
+      "body": {"username": "testauth99", "name": "Тест Auth", "bio": "", "password": "secret123"},
       "expectedStatus": 200,
       "expectedBody": {"ok": true},
       "bodyMatcher": "partial"
     },
     {
-      "name": "Save profile again upsert",
+      "name": "Register duplicate username",
       "method": "POST",
-      "path": "/?action=save_profile",
-      "body": {"username": "testuser1", "name": "Тест Юзер Обновлён", "bio": "обновлён"},
-      "expectedStatus": 200,
-      "expectedBody": {"ok": true},
+      "path": "/?action=register",
+      "body": {"username": "testauth99", "name": "Dup", "bio": "", "password": "secret123"},
+      "expectedStatus": 409,
+      "expectedBody": {"error": "Юзернейм уже занят"},
       "bodyMatcher": "partial"
     },
     {
-      "name": "Get unknown profile",
-      "method": "GET",
-      "path": "/?action=get_profile&username=no_such_user_xyz",
-      "expectedStatus": 404,
-      "expectedBody": {"error": "Пользователь не найден"},
+      "name": "Login wrong password",
+      "method": "POST",
+      "path": "/?action=login",
+      "body": {"username": "testauth99", "password": "wrongpass"},
+      "expectedStatus": 401,
+      "expectedBody": {"error": "Неверный пароль"},
       "bodyMatcher": "partial"
     }
   ]
