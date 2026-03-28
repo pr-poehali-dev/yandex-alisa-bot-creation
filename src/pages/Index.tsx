@@ -10,18 +10,18 @@ interface Message {
 
 const ALICE_RESPONSES: Record<string, string> = {
   default: "Я пока не подключена к настоящему ИИ, но скоро буду отвечать на любые вопросы! Напишите владельцу сайта, чтобы подключить меня.",
-  привет: "Привет! Я Алиса, ваш голосовой помощник. Чем могу помочь?",
+  привет: "Привет! Я Семицвет AI 2.0, ваш умный помощник. Чем могу помочь?",
   "как дела": "Отлично, спасибо что спросили! Готова помогать вам каждый день.",
   помощь: "Конечно помогу! Задайте любой вопрос, и я постараюсь найти ответ.",
   "что умеешь": "Я умею отвечать на вопросы, искать информацию, помогать с задачами и просто поддерживать беседу!",
   погода: "Сейчас я не могу проверить погоду, но вы можете спросить у меня что-то другое!",
-  "кто ты": "Я Алиса — умный голосовой помощник. Создана, чтобы делать вашу жизнь проще и интереснее.",
+  "кто ты": "Я Семицвет AI 2.0 — умный помощник от разработчика Lavrov1yList. Создана, чтобы делать вашу жизнь проще и интереснее.",
   спасибо: "Всегда пожалуйста! Обращайтесь, если понадоблюсь.",
 };
 
 const SUGGESTIONS = ["Кто ты?", "Что умеешь?", "Как дела?", "Помощь"];
 
-function getAliceResponse(text: string): string {
+function getBotResponse(text: string): string {
   const lower = text.toLowerCase().trim();
   for (const key of Object.keys(ALICE_RESPONSES)) {
     if (lower.includes(key)) return ALICE_RESPONSES[key];
@@ -118,7 +118,7 @@ export default function Index() {
       const aliceMsg: Message = {
         id: Date.now() + 1,
         role: "alice",
-        text: getAliceResponse(text),
+        text: getBotResponse(text),
         time: getTime(),
       };
       setIsTyping(false);
