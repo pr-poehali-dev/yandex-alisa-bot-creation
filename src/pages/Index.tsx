@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import Icon from "@/components/ui/icon";
 
 interface Message {
@@ -81,6 +82,7 @@ const TypingIndicator = () => (
 );
 
 export default function Index() {
+  const navigate = useNavigate();
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 1,
@@ -188,6 +190,23 @@ export default function Index() {
             <span className="w-1.5 h-1.5 rounded-full bg-green-400 inline-block" />
             <span className="text-xs text-green-600 font-medium">онлайн</span>
           </div>
+        </div>
+        {/* Nav tabs */}
+        <div className="max-w-2xl mx-auto px-4 pb-3 flex gap-2">
+          <button
+            className="flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-sm font-medium transition-all text-white"
+            style={{ background: "linear-gradient(135deg, #7B61FF, #A78BFA)" }}
+          >
+            <Icon name="MessageCircle" size={16} />
+            Чат
+          </button>
+          <button
+            onClick={() => navigate("/settings")}
+            className="flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-sm font-medium border border-gray-200 text-gray-500 hover:bg-gray-50 transition-all"
+          >
+            <Icon name="Settings" size={16} />
+            Настройки
+          </button>
         </div>
       </header>
 
