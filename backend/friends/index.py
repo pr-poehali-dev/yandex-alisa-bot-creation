@@ -156,11 +156,11 @@ def handler(event: dict, context) -> dict:
             token = body.get("token", "")
             if not username or not token:
                 return resp(400, {"error": "Неверные данные"})
-            cur.execute("SELECT username, name, bio, avatar, email, two_fa_enabled FROM users WHERE username=%s AND session_token=%s", (username, token))
+            cur.execute("SELECT username, name, bio, avatar, email, two_fa_enabled, is_banned FROM users WHERE username=%s AND session_token=%s", (username, token))
             row = cur.fetchone()
             if not row:
                 return resp(401, {"error": "Сессия недействительна"})
-            return resp(200, {"ok": True, "username": row[0], "name": row[1], "bio": row[2], "avatar": row[3], "email": row[4], "two_fa": row[5]})
+            return resp(200, {"ok": True, "username": row[0], "name": row[1], "bio": row[2], "avatar": row[3], "email": row[4], "two_fa": row[5], "banned": bool(row[6])})
 
         # ── Send email verification code (for connecting email) ──
         if action == "send_connect_email_code" and method == "POST":
@@ -507,8 +507,6 @@ def handler(event: dict, context) -> dict:
                 return resp(404, {"error": "Пользователь не найден"})
             ban_val = action == "admin_ban"
             cur.execute("UPDATE users SET is_banned=%s WHERE username=%s", (ban_val, target))
-            if ban_val:
-                cur.execute("UPDATE users SET session_token=NULL WHERE username=%s", (target,))
             conn.commit()
             return resp(200, {"ok": True})
 

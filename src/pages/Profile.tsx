@@ -117,6 +117,9 @@ export default function Profile() {
   const [authError, setAuthError] = useState("");
   const [authLoading, setAuthLoading] = useState(false);
 
+  // ── ban state ──
+  const [isBanned, setIsBanned] = useState(false);
+
   // ── 2FA state (pending login) ──
   const [twoFaPending, setTwoFaPending] = useState<string | null>(null); // username waiting for 2fa code
   const [twoFaCode, setTwoFaCode] = useState("");
@@ -227,6 +230,21 @@ export default function Profile() {
     localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
   }, [profile]);
 
+  // periodic ban check
+  useEffect(() => {
+    if (!session || isBanned) return;
+    const interval = setInterval(() => {
+      fetch(`${FRIENDS_API}?action=verify_token`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: session.username, token: session.token }),
+      }).then((r) => r.json()).then((data) => {
+        if (data.ok && data.banned) setIsBanned(true);
+      }).catch(() => {});
+    }, 15000);
+    return () => clearInterval(interval);
+  }, [session, isBanned]);
+
   // verify session on mount
   useEffect(() => {
     if (!session) return;
@@ -237,6 +255,7 @@ export default function Profile() {
     }).then((r) => r.json()).then((data) => {
       if (!data.ok) { setSession(null); setProfile(defaultProfile); }
       else {
+        if (data.banned) { setIsBanned(true); return; }
         setProfile({ name: data.name, username: data.username, bio: data.bio || "", avatar: data.avatar });
         setProfileEmail(data.email || null);
         setProfileTwoFa(!!data.two_fa);
@@ -415,6 +434,21 @@ export default function Profile() {
     } catch (_) { setFriendError("Нет соединения"); }
     finally { setFriendLoading(false); }
   };
+
+  // ── Ban screen ──
+  if (isBanned) {
+    return (
+      <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center select-none" style={{ background: "#000" }}>
+        <div className="text-center px-8">
+          <div className="text-6xl mb-6">🚫</div>
+          <h1 className="text-4xl font-black tracking-tight mb-3" style={{ color: "#ff2222", textShadow: "0 0 32px #ff0000aa" }}>
+            ВЫ ЗАБАНЕНЫ
+          </h1>
+          <p className="text-sm" style={{ color: "#660000" }}>Доступ к аккаунту ограничен администратором</p>
+        </div>
+      </div>
+    );
+  }
 
   // ── 2FA code screen ──
   if (twoFaPending) {
