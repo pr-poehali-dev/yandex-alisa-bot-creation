@@ -30,6 +30,8 @@ export default function Admin() {
   const isOwner = me === ADMIN_USERNAME;
   const isMod = isOwner || myRole === "moderator";
 
+  const [tab, setTab] = useState(0);
+
   const [text, setText] = useState("");
   const [type, setType] = useState("announcement");
   const [loading, setLoading] = useState(false);
@@ -40,15 +42,14 @@ export default function Admin() {
   const [banList, setBanList] = useState<UserItem[]>([]);
   const [banListLoading, setBanListLoading] = useState(false);
 
-  // all users modal
-  const [showUserList, setShowUserList] = useState(false);
+  // all users
   const [userList, setUserList] = useState<UserItem[]>([]);
   const [userListLoading, setUserListLoading] = useState(false);
+  const [userListLoaded, setUserListLoaded] = useState(false);
   const [userSearch, setUserSearch] = useState("");
   const [banActionLoading, setBanActionLoading] = useState<string | null>(null);
 
-  // rights modal
-  const [showRights, setShowRights] = useState(false);
+  // rights
   const [rightsTarget, setRightsTarget] = useState("");
   const [rightsLoading, setRightsLoading] = useState(false);
   const [rightsResult, setRightsResult] = useState<{ ok: boolean; message: string } | null>(null);
@@ -58,6 +59,13 @@ export default function Admin() {
     window.addEventListener("friends-badge-update", handler);
     return () => window.removeEventListener("friends-badge-update", handler);
   }, []);
+
+  // load users when tab 1 is opened
+  useEffect(() => {
+    if (tab === 1 && !userListLoaded) {
+      loadUserList();
+    }
+  }, [tab]);
 
   if (!isMod) {
     return (
@@ -107,9 +115,7 @@ export default function Admin() {
     finally { setBanListLoading(false); }
   }
 
-  async function openUserList() {
-    setShowUserList(true);
-    setUserSearch("");
+  async function loadUserList() {
     setUserListLoading(true);
     try {
       const res = await fetch(`${FRIENDS_API}?action=get_all_users`, {
@@ -119,6 +125,7 @@ export default function Admin() {
       });
       const data = await res.json();
       setUserList(data.users || []);
+      setUserListLoaded(true);
     } catch { setUserList([]); }
     finally { setUserListLoading(false); }
   }
@@ -164,6 +171,10 @@ export default function Admin() {
     u.username.includes(userSearch.toLowerCase()) || u.name.toLowerCase().includes(userSearch.toLowerCase())
   );
 
+  const TABS = isOwner
+    ? [{ label: "Рассылка", icon: "Megaphone" }, { label: "Пользователи", icon: "Users" }]
+    : [{ label: "Действия", icon: "ShieldCheck" }, { label: "Пользователи", icon: "Users" }];
+
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       <div className="sticky top-0 z-10 bg-white border-b border-gray-100 pt-4 pb-2">
@@ -171,6 +182,7 @@ export default function Admin() {
       </div>
 
       <div className="flex-1 max-w-2xl mx-auto w-full px-4 py-6 flex flex-col gap-5">
+        {/* Header */}
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl flex items-center justify-center"
             style={{ background: "linear-gradient(135deg, #7B61FF, #A78BFA)" }}>
@@ -184,66 +196,185 @@ export default function Admin() {
           </div>
         </div>
 
-        {/* Quick action buttons */}
-        <div className="grid grid-cols-3 gap-2">
-          <button onClick={openBanList}
-            className="flex flex-col items-center gap-1.5 py-3 rounded-xl text-xs font-semibold bg-white border border-gray-200 text-gray-700 hover:bg-red-50 hover:border-red-200 hover:text-red-600 transition-all active:scale-95">
-            <Icon name="Ban" size={18} />
-            Бан лист
-          </button>
-          <button onClick={openUserList}
-            className="flex flex-col items-center gap-1.5 py-3 rounded-xl text-xs font-semibold bg-white border border-gray-200 text-gray-700 hover:bg-purple-50 hover:border-purple-200 hover:text-purple-600 transition-all active:scale-95">
-            <Icon name="Users" size={18} />
-            Список
-          </button>
-          {isOwner && (
-            <button onClick={() => { setShowRights(true); setRightsResult(null); setRightsTarget(""); }}
-              className="flex flex-col items-center gap-1.5 py-3 rounded-xl text-xs font-semibold bg-white border border-gray-200 text-gray-700 hover:bg-blue-50 hover:border-blue-200 hover:text-blue-600 transition-all active:scale-95">
-              <Icon name="ShieldCheck" size={18} />
-              Права
+        {/* Tabs */}
+        <div className="flex gap-2 bg-gray-100 rounded-xl p-1">
+          {TABS.map((t, i) => (
+            <button key={i} onClick={() => setTab(i)}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-semibold transition-all ${tab === i ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
+              <Icon name={t.icon as "Megaphone" | "Users"} size={15} />
+              {t.label}
             </button>
-          )}
+          ))}
         </div>
 
-        {/* Broadcast — only owner */}
-        {isOwner && (
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex flex-col gap-4">
-            <div className="flex items-center gap-2 mb-1">
-              <Icon name="Megaphone" size={16} className="text-purple-400" />
-              <span className="font-semibold text-gray-800 text-sm">Системное сообщение всем</span>
+        {/* Tab 0 */}
+        {tab === 0 && (
+          <>
+            {/* Quick action buttons */}
+            <div className="grid grid-cols-1 gap-2">
+              <button onClick={openBanList}
+                className="flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-semibold bg-white border border-gray-200 text-gray-700 hover:bg-red-50 hover:border-red-200 hover:text-red-600 transition-all active:scale-95">
+                <Icon name="Ban" size={18} />
+                <span>Бан лист</span>
+                <Icon name="ChevronRight" size={15} className="ml-auto text-gray-300" />
+              </button>
             </div>
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs text-gray-500 font-medium">Тип сообщения</label>
-              <select value={type} onChange={(e) => setType(e.target.value)}
-                className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-purple-300 transition-all">
-                <option value="announcement">📢 Объявление</option>
-                <option value="update">🆕 Обновление</option>
-                <option value="warning">⚠️ Предупреждение</option>
-                <option value="info">ℹ️ Информация</option>
-              </select>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs text-gray-500 font-medium">Текст сообщения</label>
-              <textarea value={text} onChange={(e) => setText(e.target.value)}
-                placeholder="Введите текст системного сообщения..."
-                rows={4}
-                className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-800 outline-none focus:border-purple-300 focus:bg-white transition-all resize-none" />
-              <p className="text-xs text-gray-400">{text.length} символов</p>
-            </div>
-            {result && (
-              <div className={`flex items-center gap-2 px-4 py-3 rounded-xl text-sm ${result.ok ? "bg-green-50 text-green-700" : "bg-red-50 text-red-600"}`}>
-                <Icon name={result.ok ? "CheckCircle" : "AlertCircle"} size={16} />
-                {result.message}
+
+            {/* Broadcast — only owner */}
+            {isOwner && (
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex flex-col gap-4">
+                <div className="flex items-center gap-2 mb-1">
+                  <Icon name="Megaphone" size={16} className="text-purple-400" />
+                  <span className="font-semibold text-gray-800 text-sm">Системное сообщение всем</span>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs text-gray-500 font-medium">Тип сообщения</label>
+                  <select value={type} onChange={(e) => setType(e.target.value)}
+                    className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-purple-300 transition-all">
+                    <option value="announcement">📢 Объявление</option>
+                    <option value="update">🆕 Обновление</option>
+                    <option value="warning">⚠️ Предупреждение</option>
+                    <option value="info">ℹ️ Информация</option>
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs text-gray-500 font-medium">Текст сообщения</label>
+                  <textarea value={text} onChange={(e) => setText(e.target.value)}
+                    placeholder="Введите текст системного сообщения..."
+                    rows={4}
+                    className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-800 outline-none focus:border-purple-300 focus:bg-white transition-all resize-none" />
+                  <p className="text-xs text-gray-400">{text.length} символов</p>
+                </div>
+                {result && (
+                  <div className={`flex items-center gap-2 px-4 py-3 rounded-xl text-sm ${result.ok ? "bg-green-50 text-green-700" : "bg-red-50 text-red-600"}`}>
+                    <Icon name={result.ok ? "CheckCircle" : "AlertCircle"} size={16} />
+                    {result.message}
+                  </div>
+                )}
+                <button onClick={sendBroadcast} disabled={loading || !text.trim()}
+                  className="w-full py-3 rounded-xl text-sm font-semibold text-white transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                  style={{ background: "linear-gradient(135deg, #7B61FF, #A78BFA)" }}>
+                  {loading
+                    ? <span className="flex items-center justify-center gap-2"><Icon name="Loader2" size={16} className="animate-spin" />Отправка...</span>
+                    : <span className="flex items-center justify-center gap-2"><Icon name="Send" size={16} />Отправить всем пользователям</span>}
+                </button>
               </div>
             )}
-            <button onClick={sendBroadcast} disabled={loading || !text.trim()}
-              className="w-full py-3 rounded-xl text-sm font-semibold text-white transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-              style={{ background: "linear-gradient(135deg, #7B61FF, #A78BFA)" }}>
-              {loading
-                ? <span className="flex items-center justify-center gap-2"><Icon name="Loader2" size={16} className="animate-spin" />Отправка...</span>
-                : <span className="flex items-center justify-center gap-2"><Icon name="Send" size={16} />Отправить всем пользователям</span>}
+
+            {/* Next tab button */}
+            <button onClick={() => setTab(1)}
+              className="flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold bg-white border border-gray-200 text-gray-700 hover:bg-purple-50 hover:border-purple-200 hover:text-purple-600 transition-all active:scale-95 mt-auto">
+              <span>Дальше</span>
+              <Icon name="ArrowRight" size={16} />
             </button>
-          </div>
+          </>
+        )}
+
+        {/* Tab 1 — users + rights */}
+        {tab === 1 && (
+          <>
+            {/* User list */}
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 flex flex-col overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+                <div className="flex items-center gap-2">
+                  <Icon name="Users" size={15} className="text-purple-400" />
+                  <span className="font-semibold text-gray-800 text-sm">
+                    Все аккаунты {!userListLoading && userList.length > 0 && `(${userList.length})`}
+                  </span>
+                </div>
+                <button onClick={loadUserList} className="text-gray-400 hover:text-purple-500 transition-colors">
+                  <Icon name="RefreshCw" size={14} />
+                </button>
+              </div>
+              <div className="px-4 pt-3 pb-2">
+                <div className="relative">
+                  <Icon name="Search" size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input value={userSearch} onChange={(e) => setUserSearch(e.target.value)}
+                    placeholder="Поиск..."
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-8 pr-4 py-2 text-sm text-gray-800 outline-none focus:border-purple-300 transition-all" />
+                </div>
+              </div>
+              <div className="overflow-y-auto max-h-64 px-4 pb-3 flex flex-col gap-2">
+                {userListLoading ? (
+                  <div className="flex justify-center py-6"><Icon name="Loader2" size={22} className="animate-spin text-gray-300" /></div>
+                ) : filteredUsers.length === 0 ? (
+                  <div className="text-center py-6 text-gray-400 text-sm">Ничего не найдено</div>
+                ) : filteredUsers.map((u) => (
+                  <div key={u.username} className="flex items-center gap-3 py-1">
+                    {u.avatar
+                      ? <img src={u.avatar} className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
+                      : <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0"><Icon name="User" size={14} className="text-gray-400" /></div>}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-sm font-medium text-gray-800 truncate">{u.name || u.username}</p>
+                        {u.role === "moderator" && (
+                          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-500">мод</span>
+                        )}
+                        {u.is_banned && (
+                          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-red-50 text-red-400">бан</span>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-400">@{u.username}</p>
+                    </div>
+                    {u.username !== me && (
+                      <button onClick={() => toggleBan(u.username, u.is_banned)} disabled={banActionLoading === u.username}
+                        className={`flex-shrink-0 px-3 py-1 rounded-lg text-xs font-semibold transition-all active:scale-95 disabled:opacity-50 ${u.is_banned ? "bg-green-50 text-green-600 hover:bg-green-100" : "bg-red-50 text-red-500 hover:bg-red-100"}`}>
+                        {banActionLoading === u.username
+                          ? <Icon name="Loader2" size={11} className="animate-spin" />
+                          : u.is_banned ? "Разбанить" : "Забанить"}
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Rights — owner only */}
+            {isOwner && (
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex flex-col gap-4">
+                <div className="flex items-center gap-2">
+                  <Icon name="ShieldCheck" size={15} className="text-blue-400" />
+                  <span className="font-semibold text-gray-800 text-sm">Управление правами</span>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs text-gray-500 font-medium">Юзернейм</label>
+                  <input
+                    value={rightsTarget}
+                    onChange={(e) => setRightsTarget(e.target.value)}
+                    placeholder="@юзернейм"
+                    className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-blue-300 transition-all"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <button onClick={() => setRole("member")} disabled={rightsLoading || !rightsTarget.trim()}
+                    className="flex flex-col items-center gap-2 py-4 rounded-xl border-2 border-gray-200 hover:border-gray-400 hover:bg-gray-50 transition-all active:scale-95 disabled:opacity-50">
+                    <Icon name="User" size={20} className="text-gray-500" />
+                    <div>
+                      <p className="text-sm font-semibold text-gray-800">Участник</p>
+                      <p className="text-xs text-gray-400">Обычный аккаунт</p>
+                    </div>
+                  </button>
+                  <button onClick={() => setRole("moderator")} disabled={rightsLoading || !rightsTarget.trim()}
+                    className="flex flex-col items-center gap-2 py-4 rounded-xl border-2 border-blue-200 hover:border-blue-400 hover:bg-blue-50 transition-all active:scale-95 disabled:opacity-50">
+                    <Icon name="ShieldCheck" size={20} className="text-blue-500" />
+                    <div>
+                      <p className="text-sm font-semibold text-blue-700">Модератор</p>
+                      <p className="text-xs text-blue-400">Бан, разбан</p>
+                    </div>
+                  </button>
+                </div>
+                {rightsLoading && (
+                  <div className="flex justify-center"><Icon name="Loader2" size={20} className="animate-spin text-gray-400" /></div>
+                )}
+                {rightsResult && (
+                  <div className={`flex items-center gap-2 px-4 py-3 rounded-xl text-sm ${rightsResult.ok ? "bg-green-50 text-green-700" : "bg-red-50 text-red-600"}`}>
+                    <Icon name={rightsResult.ok ? "CheckCircle" : "AlertCircle"} size={16} />
+                    {rightsResult.message}
+                  </div>
+                )}
+              </div>
+            )}
+          </>
         )}
       </div>
 
@@ -278,114 +409,6 @@ export default function Admin() {
                   </button>
                 </div>
               ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* All users modal */}
-      {showUserList && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 px-0 sm:px-4" onClick={() => setShowUserList(false)}>
-          <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl shadow-xl flex flex-col max-h-[85vh]" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-              <div className="flex items-center gap-2">
-                <Icon name="Users" size={16} className="text-purple-400" />
-                <span className="font-semibold text-gray-800 text-sm">Все аккаунты {!userListLoading && `(${userList.length})`}</span>
-              </div>
-              <button onClick={() => setShowUserList(false)} className="text-gray-400 hover:text-gray-600"><Icon name="X" size={18} /></button>
-            </div>
-            <div className="px-5 pt-3 pb-2">
-              <div className="relative">
-                <Icon name="Search" size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                <input value={userSearch} onChange={(e) => setUserSearch(e.target.value)}
-                  placeholder="Поиск по имени или @юзернейму..."
-                  className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-9 pr-4 py-2.5 text-sm text-gray-800 outline-none focus:border-purple-300 transition-all" />
-              </div>
-            </div>
-            <div className="flex-1 overflow-y-auto px-5 py-3 flex flex-col gap-2">
-              {userListLoading ? (
-                <div className="flex justify-center py-8"><Icon name="Loader2" size={24} className="animate-spin text-gray-300" /></div>
-              ) : filteredUsers.length === 0 ? (
-                <div className="text-center py-8 text-gray-400 text-sm">Ничего не найдено</div>
-              ) : filteredUsers.map((u) => (
-                <div key={u.username} className="flex items-center gap-3 py-1">
-                  {u.avatar
-                    ? <img src={u.avatar} className="w-9 h-9 rounded-full object-cover flex-shrink-0" />
-                    : <div className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0"><Icon name="User" size={16} className="text-gray-400" /></div>}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <p className="text-sm font-medium text-gray-800 truncate">{u.name || u.username}</p>
-                      {u.role === "moderator" && (
-                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-500">мод</span>
-                      )}
-                    </div>
-                    <p className="text-xs text-gray-400">@{u.username}{u.is_banned ? " · забанен" : ""}</p>
-                  </div>
-                  {u.username !== me && (
-                    <button onClick={() => toggleBan(u.username, u.is_banned)} disabled={banActionLoading === u.username}
-                      className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all active:scale-95 disabled:opacity-50 ${u.is_banned ? "bg-green-50 text-green-600 hover:bg-green-100" : "bg-red-50 text-red-500 hover:bg-red-100"}`}>
-                      {banActionLoading === u.username
-                        ? <Icon name="Loader2" size={12} className="animate-spin" />
-                        : u.is_banned ? "Разбанить" : "Забанить"}
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Rights modal — owner only */}
-      {showRights && isOwner && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 px-0 sm:px-4" onClick={() => setShowRights(false)}>
-          <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl shadow-xl flex flex-col" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-              <div className="flex items-center gap-2">
-                <Icon name="ShieldCheck" size={16} className="text-blue-400" />
-                <span className="font-semibold text-gray-800 text-sm">Управление правами</span>
-              </div>
-              <button onClick={() => setShowRights(false)} className="text-gray-400 hover:text-gray-600"><Icon name="X" size={18} /></button>
-            </div>
-            <div className="px-5 py-5 flex flex-col gap-4">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs text-gray-500 font-medium">Юзернейм пользователя</label>
-                <input
-                  value={rightsTarget}
-                  onChange={(e) => setRightsTarget(e.target.value)}
-                  placeholder="@юзернейм"
-                  className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-blue-300 transition-all"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <button onClick={() => setRole("member")} disabled={rightsLoading || !rightsTarget.trim()}
-                  className="flex flex-col items-center gap-2 py-4 rounded-xl border-2 border-gray-200 hover:border-gray-400 hover:bg-gray-50 transition-all active:scale-95 disabled:opacity-50">
-                  <Icon name="User" size={22} className="text-gray-500" />
-                  <div>
-                    <p className="text-sm font-semibold text-gray-800">Участник</p>
-                    <p className="text-xs text-gray-400">Обычный аккаунт</p>
-                  </div>
-                </button>
-                <button onClick={() => setRole("moderator")} disabled={rightsLoading || !rightsTarget.trim()}
-                  className="flex flex-col items-center gap-2 py-4 rounded-xl border-2 border-blue-200 hover:border-blue-400 hover:bg-blue-50 transition-all active:scale-95 disabled:opacity-50">
-                  <Icon name="ShieldCheck" size={22} className="text-blue-500" />
-                  <div>
-                    <p className="text-sm font-semibold text-blue-700">Модератор</p>
-                    <p className="text-xs text-blue-400">Бан, разбан, бан лист</p>
-                  </div>
-                </button>
-              </div>
-
-              {rightsLoading && (
-                <div className="flex justify-center"><Icon name="Loader2" size={20} className="animate-spin text-gray-400" /></div>
-              )}
-              {rightsResult && (
-                <div className={`flex items-center gap-2 px-4 py-3 rounded-xl text-sm ${rightsResult.ok ? "bg-green-50 text-green-700" : "bg-red-50 text-red-600"}`}>
-                  <Icon name={rightsResult.ok ? "CheckCircle" : "AlertCircle"} size={16} />
-                  {rightsResult.message}
-                </div>
-              )}
             </div>
           </div>
         </div>
