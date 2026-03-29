@@ -1,6 +1,7 @@
 import json
 import os
 import urllib.request
+import urllib.error
 
 
 def handler(event: dict, context) -> dict:
@@ -28,7 +29,8 @@ def handler(event: dict, context) -> dict:
             'body': json.dumps({'error': 'message is required'})
         }
 
-    api_key = os.environ.get('OPENAI_API_KEY', '')
+    api_key = os.environ.get('OPENAI_API_KEY', '').strip()
+    api_key = ''.join(c for c in api_key if ord(c) < 128)
 
     messages = [
         {
@@ -64,10 +66,18 @@ def handler(event: dict, context) -> dict:
         method='POST'
     )
 
-    with urllib.request.urlopen(req) as resp:
-        result = json.loads(resp.read())
-
-    reply = result['choices'][0]['message']['content']
+    try:
+        with urllib.request.urlopen(req) as resp:
+            result = json.loads(resp.read())
+        reply = result['choices'][0]['message']['content']
+    except urllib.error.HTTPError as e:
+        error_body = e.read().decode('utf-8')
+        print(f'[OpenAI ERROR] status={e.code} key_prefix={api_key[:10] if api_key else "EMPTY"} body={error_body}')
+        return {
+            'statusCode': 200,
+            'headers': {'Access-Control-Allow-Origin': '*'},
+            'body': json.dumps({'reply': f'Ошибка OpenAI {e.code}: {error_body}'})
+        }
 
     return {
         'statusCode': 200,
