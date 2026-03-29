@@ -10,6 +10,7 @@ import Profile from "./pages/Profile";
 import Friends from "./pages/Friends";
 import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
+import BanProvider from "./context/BanContext";
 
 const queryClient = new QueryClient();
 
@@ -18,6 +19,7 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
+      <BanProvider>
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Index />} />
@@ -29,6 +31,7 @@ const App = () => (
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
+      </BanProvider>
     </TooltipProvider>
   </QueryClientProvider>
 );
