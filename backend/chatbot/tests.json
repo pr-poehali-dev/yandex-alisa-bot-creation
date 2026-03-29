@@ -1,0 +1,13 @@
+{
+  "tests": [
+    {
+      "name": "Chat with bot",
+      "method": "POST",
+      "path": "/",
+      "body": {"message": "Привет, как дела?", "history": []},
+      "expectedStatus": 200,
+      "expectedBody": {"reply": "string"},
+      "bodyMatcher": "partial"
+    }
+  ]
+}

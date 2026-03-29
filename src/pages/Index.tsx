@@ -10,32 +10,9 @@ interface Message {
   time: string;
 }
 
-const BOT_RESPONSES: Record<string, string> = {
-  default: "Я пока не подключён к настоящему ИИ, но скоро буду отвечать на любые вопросы! Напишите владельцу сайта, чтобы подключить меня.",
-  привет: "Привет! Я Семицвет AI 2.0, ваш умный помощник. Чем могу помочь?",
-  "как дела": "Отлично, спасибо что спросили! Готов помогать вам каждый день.",
-  помощь: "Конечно помогу! Задайте любой вопрос, и я постараюсь найти ответ.",
-  "что умеешь": "Я умею отвечать на вопросы, искать информацию, помогать с задачами и просто поддерживать беседу!",
-  погода: "Сейчас я не могу проверить погоду, но вы можете спросить у меня что-то другое!",
-  "кто ты": "Я Семицвет AI 2.0 — умный помощник от разработчика Lavrov1yList. Создан, чтобы делать вашу жизнь проще и интереснее.",
-  спасибо: "Всегда пожалуйста! Обращайтесь, если понадоблюсь.",
-};
+const CHATBOT_URL = "https://functions.poehali.dev/63a16562-0f1a-4ed8-b2af-50a93bf90aa3";
 
 const SUGGESTIONS = ["Кто ты?", "Что умеешь?", "Как дела?", "Помощь"];
-
-function getBotResponse(text: string): string {
-  const lower = text.toLowerCase().trim();
-  try {
-    const custom: { trigger: string; response: string }[] = JSON.parse(localStorage.getItem("semitsvet_custom_phrases") || "[]");
-    for (const p of custom) {
-      if (lower.includes(p.trigger.toLowerCase())) return p.response;
-    }
-  } catch (_) { /* ignore */ }
-  for (const key of Object.keys(BOT_RESPONSES)) {
-    if (lower.includes(key)) return BOT_RESPONSES[key];
-  }
-  return BOT_RESPONSES.default;
-}
 
 function getTime() {
   return new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
@@ -125,7 +102,7 @@ export default function Index() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isTyping]);
 
-  const sendMessage = (text: string) => {
+  const sendMessage = async (text: string) => {
     if (!text.trim()) return;
 
     const userMsg: Message = {
@@ -140,16 +117,37 @@ export default function Index() {
     setIsTyping(true);
     setShowSuggestions(false);
 
-    setTimeout(() => {
-      const botMsg: Message = {
+    try {
+      const history = messages.map((m) => ({
+        role: m.role === "bot" ? "assistant" : "user",
+        content: m.text,
+      }));
+
+      const res = await fetch(CHATBOT_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: text.trim(), history }),
+      });
+
+      const data = await res.json();
+      const reply = data.reply || "Не смог получить ответ, попробуйте ещё раз.";
+
+      setMessages((prev) => [...prev, {
         id: Date.now() + 1,
         role: "bot",
-        text: getBotResponse(text),
+        text: reply,
         time: getTime(),
-      };
+      }]);
+    } catch {
+      setMessages((prev) => [...prev, {
+        id: Date.now() + 1,
+        role: "bot",
+        text: "Ошибка соединения, попробуйте позже.",
+        time: getTime(),
+      }]);
+    } finally {
       setIsTyping(false);
-      setMessages((prev) => [...prev, botMsg]);
-    }, 900 + Math.random() * 600);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
