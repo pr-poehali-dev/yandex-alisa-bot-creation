@@ -5,7 +5,7 @@ import urllib.error
 
 
 def handler(event: dict, context) -> dict:
-    """Отвечает на любое сообщение пользователя через OpenAI GPT."""
+    """Отвечает на любое сообщение пользователя через Groq API."""
     if event.get('httpMethod') == 'OPTIONS':
         return {
             'statusCode': 200,
@@ -29,7 +29,7 @@ def handler(event: dict, context) -> dict:
             'body': json.dumps({'error': 'message is required'})
         }
 
-    api_key = os.environ.get('OPENAI_API_KEY', '').strip()
+    api_key = os.environ.get('GROQ_API_KEY', '').strip()
     api_key = ''.join(c for c in api_key if ord(c) < 128)
 
     messages = [
@@ -50,14 +50,14 @@ def handler(event: dict, context) -> dict:
     messages.append({'role': 'user', 'content': message})
 
     payload = json.dumps({
-        'model': 'gpt-4o-mini',
+        'model': 'llama-3.3-70b-versatile',
         'messages': messages,
         'max_tokens': 500,
         'temperature': 0.7
     }).encode('utf-8')
 
     req = urllib.request.Request(
-        'https://api.openai.com/v1/chat/completions',
+        'https://api.groq.com/openai/v1/chat/completions',
         data=payload,
         headers={
             'Content-Type': 'application/json',
@@ -66,18 +66,10 @@ def handler(event: dict, context) -> dict:
         method='POST'
     )
 
-    try:
-        with urllib.request.urlopen(req) as resp:
-            result = json.loads(resp.read())
-        reply = result['choices'][0]['message']['content']
-    except urllib.error.HTTPError as e:
-        error_body = e.read().decode('utf-8')
-        print(f'[OpenAI ERROR] status={e.code} key_prefix={api_key[:10] if api_key else "EMPTY"} body={error_body}')
-        return {
-            'statusCode': 200,
-            'headers': {'Access-Control-Allow-Origin': '*'},
-            'body': json.dumps({'reply': f'Ошибка OpenAI {e.code}: {error_body}'})
-        }
+    with urllib.request.urlopen(req) as resp:
+        result = json.loads(resp.read())
+
+    reply = result['choices'][0]['message']['content']
 
     return {
         'statusCode': 200,
