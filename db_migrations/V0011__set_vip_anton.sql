@@ -1,0 +1,1 @@
+UPDATE users SET is_vip = true WHERE username = 'anton';
