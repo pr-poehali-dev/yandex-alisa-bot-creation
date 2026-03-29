@@ -1,8 +1,14 @@
+# v2fa
 import json
 import os
 import hashlib
 import secrets
+import smtplib
+import random
 import psycopg2
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from datetime import datetime, timezone, timedelta
 
 
 def hash_password(password: str) -> str:
@@ -11,6 +17,26 @@ def hash_password(password: str) -> str:
 
 def make_token() -> str:
     return secrets.token_hex(32)
+
+
+def make_email_code() -> str:
+    return str(random.randint(100000, 999999))
+
+
+def send_email(to: str, subject: str, html: str):
+    host = os.environ.get("SMTP_HOST", "smtp.gmail.com")
+    port = int(os.environ.get("SMTP_PORT", "587"))
+    user = os.environ["SMTP_USER"]
+    password = os.environ["SMTP_PASSWORD"]
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = subject
+    msg["From"] = user
+    msg["To"] = to
+    msg.attach(MIMEText(html, "html"))
+    with smtplib.SMTP(host, port) as smtp:
+        smtp.starttls()
+        smtp.login(user, password)
+        smtp.sendmail(user, to, msg.as_string())
 
 def get_conn():
     return psycopg2.connect(os.environ["DATABASE_URL"])
@@ -77,7 +103,7 @@ def handler(event: dict, context) -> dict:
             if not username or not password:
                 return resp(400, {"error": "Введите юзернейм и пароль"})
             pw_hash = hash_password(password)
-            cur.execute("SELECT username, name, bio, avatar, password_hash, is_banned FROM users WHERE username=%s", (username,))
+            cur.execute("SELECT username, name, bio, avatar, password_hash, is_banned, two_fa_enabled, email FROM users WHERE username=%s", (username,))
             row = cur.fetchone()
             if not row:
                 return resp(404, {"error": "Пользователь не найден"})
@@ -85,8 +111,42 @@ def handler(event: dict, context) -> dict:
                 return resp(403, {"error": "Аккаунт заблокирован"})
             if row[4] != pw_hash:
                 return resp(401, {"error": "Неверный пароль"})
+            two_fa = row[6]
+            email = row[7]
+            if two_fa and email:
+                code = make_email_code()
+                expires = datetime.now(timezone.utc) + timedelta(minutes=10)
+                cur.execute("UPDATE users SET email_code=%s, email_code_expires=%s WHERE username=%s", (code, expires, username))
+                conn.commit()
+                send_email(email, "Код входа в Семицвет AI",
+                    f"<div style='font-family:sans-serif;max-width:400px;margin:auto'>"
+                    f"<h2 style='color:#7B61FF'>Ваш код входа</h2>"
+                    f"<div style='font-size:36px;font-weight:bold;letter-spacing:8px;color:#1a1a2e;text-align:center;padding:24px;background:#f8f7ff;border-radius:12px'>{code}</div>"
+                    f"<p style='color:#888;font-size:13px;margin-top:16px'>Код действителен 10 минут. Не передавайте его никому.</p>"
+                    f"</div>")
+                return resp(200, {"ok": True, "two_fa": True, "username": row[0]})
             token = make_token()
             cur.execute("UPDATE users SET session_token=%s WHERE username=%s", (token, username))
+            conn.commit()
+            return resp(200, {"ok": True, "token": token, "username": row[0], "name": row[1], "bio": row[2], "avatar": row[3]})
+
+        # ── Verify 2FA code ──
+        if action == "verify_2fa" and method == "POST":
+            username = body.get("username", "").strip().lower()
+            code = body.get("code", "").strip()
+            if not username or not code:
+                return resp(400, {"error": "Неверные данные"})
+            cur.execute("SELECT username, name, bio, avatar, email_code, email_code_expires FROM users WHERE username=%s", (username,))
+            row = cur.fetchone()
+            if not row:
+                return resp(404, {"error": "Пользователь не найден"})
+            if row[4] != code:
+                return resp(401, {"error": "Неверный код"})
+            expires = row[5]
+            if expires and datetime.now(timezone.utc) > expires:
+                return resp(401, {"error": "Код истёк, войдите заново"})
+            token = make_token()
+            cur.execute("UPDATE users SET session_token=%s, email_code=NULL, email_code_expires=NULL WHERE username=%s", (token, username))
             conn.commit()
             return resp(200, {"ok": True, "token": token, "username": row[0], "name": row[1], "bio": row[2], "avatar": row[3]})
 
@@ -96,11 +156,71 @@ def handler(event: dict, context) -> dict:
             token = body.get("token", "")
             if not username or not token:
                 return resp(400, {"error": "Неверные данные"})
-            cur.execute("SELECT username, name, bio, avatar FROM users WHERE username=%s AND session_token=%s", (username, token))
+            cur.execute("SELECT username, name, bio, avatar, email, two_fa_enabled FROM users WHERE username=%s AND session_token=%s", (username, token))
             row = cur.fetchone()
             if not row:
                 return resp(401, {"error": "Сессия недействительна"})
-            return resp(200, {"ok": True, "username": row[0], "name": row[1], "bio": row[2], "avatar": row[3]})
+            return resp(200, {"ok": True, "username": row[0], "name": row[1], "bio": row[2], "avatar": row[3], "email": row[4], "two_fa": row[5]})
+
+        # ── Send email verification code (for connecting email) ──
+        if action == "send_connect_email_code" and method == "POST":
+            username = body.get("username", "").strip().lower()
+            token = body.get("token", "").strip()
+            email = body.get("email", "").strip().lower()
+            if not username or not token or not email or "@" not in email:
+                return resp(400, {"error": "Неверные данные"})
+            cur.execute("SELECT session_token FROM users WHERE username=%s", (username,))
+            row = cur.fetchone()
+            if not row or row[0] != token:
+                return resp(401, {"error": "Неверный токен"})
+            code = make_email_code()
+            expires = datetime.now(timezone.utc) + timedelta(minutes=10)
+            cur.execute("UPDATE users SET email_code=%s, email_code_expires=%s WHERE username=%s", (code, expires, username))
+            conn.commit()
+            send_email(email, "Подтверждение почты — Семицвет AI",
+                f"<div style='font-family:sans-serif;max-width:400px;margin:auto'>"
+                f"<h2 style='color:#7B61FF'>Подтвердите почту</h2>"
+                f"<div style='font-size:36px;font-weight:bold;letter-spacing:8px;color:#1a1a2e;text-align:center;padding:24px;background:#f8f7ff;border-radius:12px'>{code}</div>"
+                f"<p style='color:#888;font-size:13px;margin-top:16px'>Введите этот код в приложении для подтверждения. Действует 10 минут.</p>"
+                f"</div>")
+            return resp(200, {"ok": True})
+
+        # ── Confirm email connection ──
+        if action == "confirm_email" and method == "POST":
+            username = body.get("username", "").strip().lower()
+            token = body.get("token", "").strip()
+            email = body.get("email", "").strip().lower()
+            code = body.get("code", "").strip()
+            if not username or not token or not email or not code:
+                return resp(400, {"error": "Неверные данные"})
+            cur.execute("SELECT session_token, email_code, email_code_expires FROM users WHERE username=%s", (username,))
+            row = cur.fetchone()
+            if not row or row[0] != token:
+                return resp(401, {"error": "Неверный токен"})
+            if row[1] != code:
+                return resp(400, {"error": "Неверный код"})
+            if row[2] and datetime.now(timezone.utc) > row[2]:
+                return resp(400, {"error": "Код истёк"})
+            cur.execute("UPDATE users SET email=%s, email_code=NULL, email_code_expires=NULL WHERE username=%s", (email, username))
+            conn.commit()
+            return resp(200, {"ok": True})
+
+        # ── Toggle 2FA ──
+        if action == "toggle_2fa" and method == "POST":
+            username = body.get("username", "").strip().lower()
+            token = body.get("token", "").strip()
+            enabled = body.get("enabled", False)
+            if not username or not token:
+                return resp(400, {"error": "Неверные данные"})
+            cur.execute("SELECT session_token, email FROM users WHERE username=%s", (username,))
+            row = cur.fetchone()
+            if not row or row[0] != token:
+                return resp(401, {"error": "Неверный токен"})
+            if enabled and not row[1]:
+                return resp(400, {"error": "Сначала привяжите почту"})
+            cur.execute("UPDATE users SET two_fa_enabled=%s WHERE username=%s", (enabled, username))
+            conn.commit()
+            return resp(200, {"ok": True})
 
         # ── Update profile (requires token) ──
         if action == "update_profile" and method == "POST":
@@ -391,6 +511,118 @@ def handler(event: dict, context) -> dict:
                 cur.execute("UPDATE users SET session_token=NULL WHERE username=%s", (target,))
             conn.commit()
             return resp(200, {"ok": True})
+
+        # ── Send email verification / 2FA code ──
+        if action in ("send_email_code", "send_connect_email_code") and method == "POST":
+            username = body.get("username", "").strip().lower()
+            token = body.get("token", "")
+            email = body.get("email", "").strip().lower()
+            purpose = body.get("purpose", "connect")  # connect | login
+            if purpose == "connect":
+                if not username or not token or not email:
+                    return resp(400, {"error": "Неверные данные"})
+                cur.execute("SELECT 1 FROM users WHERE username=%s AND session_token=%s", (username, token))
+                if not cur.fetchone():
+                    return resp(401, {"error": "Нет доступа"})
+            elif purpose == "login":
+                if not username or not email:
+                    return resp(400, {"error": "Неверные данные"})
+                cur.execute("SELECT email, two_fa_enabled FROM users WHERE username=%s", (username,))
+                row = cur.fetchone()
+                if not row or row[0] != email or not row[1]:
+                    return resp(400, {"error": "Неверные данные"})
+            code = "".join([str(random.randint(0, 9)) for _ in range(6)])
+            expires = datetime.now(timezone.utc) + timedelta(minutes=10)
+            cur.execute("UPDATE users SET email_code=%s, email_code_expires=%s WHERE username=%s", (code, expires, username))
+            conn.commit()
+            smtp_host = os.environ.get("SMTP_HOST", "")
+            smtp_port = int(os.environ.get("SMTP_PORT", "465"))
+            smtp_user = os.environ.get("SMTP_USER", "")
+            smtp_pass = os.environ.get("SMTP_PASSWORD", "")
+            msg = MIMEMultipart("alternative")
+            msg["Subject"] = "Код подтверждения — Семицвет"
+            msg["From"] = smtp_user
+            msg["To"] = email
+            html = f"<div style='font-family:sans-serif;max-width:400px'><h2 style='color:#7B61FF'>Семицвет</h2><p>Ваш код подтверждения:</p><h1 style='letter-spacing:8px;color:#1a1a2e'>{code}</h1><p style='color:#999;font-size:13px'>Код действителен 10 минут</p></div>"
+            msg.attach(MIMEText(html, "html"))
+            with smtplib.SMTP_SSL(smtp_host, smtp_port) as server:
+                server.login(smtp_user, smtp_pass)
+                server.sendmail(smtp_user, email, msg.as_string())
+            return resp(200, {"ok": True})
+
+        # ── Verify email code and connect email ──
+        if action == "verify_email_code" and method == "POST":
+            username = body.get("username", "").strip().lower()
+            token = body.get("token", "")
+            email = body.get("email", "").strip().lower()
+            code = body.get("code", "").strip()
+            if not username or not token or not email or not code:
+                return resp(400, {"error": "Неверные данные"})
+            cur.execute("SELECT 1 FROM users WHERE username=%s AND session_token=%s", (username, token))
+            if not cur.fetchone():
+                return resp(401, {"error": "Нет доступа"})
+            cur.execute("SELECT email_code, email_code_expires FROM users WHERE username=%s", (username,))
+            row = cur.fetchone()
+            if not row or row[0] != code:
+                return resp(400, {"error": "Неверный код"})
+            if row[1] and datetime.now(timezone.utc) > row[1]:
+                return resp(400, {"error": "Код устарел"})
+            cur.execute("UPDATE users SET email=%s, email_code=NULL, email_code_expires=NULL WHERE username=%s", (email, username))
+            conn.commit()
+            return resp(200, {"ok": True})
+
+        # ── Toggle 2FA ──
+        if action == "toggle_2fa" and method == "POST":
+            username = body.get("username", "").strip().lower()
+            token = body.get("token", "")
+            enabled = body.get("enabled", False)
+            if not username or not token:
+                return resp(400, {"error": "Неверные данные"})
+            cur.execute("SELECT session_token, email FROM users WHERE username=%s", (username,))
+            row = cur.fetchone()
+            if not row or row[0] != token:
+                return resp(401, {"error": "Нет доступа"})
+            if enabled and not row[1]:
+                return resp(400, {"error": "Сначала подключите email"})
+            cur.execute("UPDATE users SET two_fa_enabled=%s WHERE username=%s", (enabled, username))
+            conn.commit()
+            return resp(200, {"ok": True})
+
+        # ── Get email/2fa status ──
+        if action == "get_security" and method == "POST":
+            username = body.get("username", "").strip().lower()
+            token = body.get("token", "")
+            if not username or not token:
+                return resp(400, {"error": "Неверные данные"})
+            cur.execute("SELECT session_token, email, two_fa_enabled FROM users WHERE username=%s", (username,))
+            row = cur.fetchone()
+            if not row or row[0] != token:
+                return resp(401, {"error": "Нет доступа"})
+            email = row[1] or ""
+            masked = ""
+            if email:
+                parts = email.split("@")
+                masked = parts[0][:2] + "***@" + parts[1] if len(parts) == 2 else email
+            return resp(200, {"email": masked, "two_fa_enabled": bool(row[2])})
+
+        # ── Login 2FA verify ──
+        if action == "verify_2fa_login" and method == "POST":
+            username = body.get("username", "").strip().lower()
+            code = body.get("code", "").strip()
+            if not username or not code:
+                return resp(400, {"error": "Неверные данные"})
+            cur.execute("SELECT email_code, email_code_expires FROM users WHERE username=%s", (username,))
+            row = cur.fetchone()
+            if not row or row[0] != code:
+                return resp(400, {"error": "Неверный код"})
+            if row[1] and datetime.now(timezone.utc) > row[1]:
+                return resp(400, {"error": "Код устарел"})
+            new_token = make_token()
+            cur.execute("UPDATE users SET session_token=%s, email_code=NULL, email_code_expires=NULL WHERE username=%s", (new_token, username))
+            cur.execute("SELECT username, name, bio, avatar FROM users WHERE username=%s", (username,))
+            urow = cur.fetchone()
+            conn.commit()
+            return resp(200, {"ok": True, "token": new_token, "username": urow[0], "name": urow[1], "bio": urow[2], "avatar": urow[3]})
 
         return resp(404, {"error": "Неизвестный action"})
 

@@ -117,6 +117,22 @@ export default function Profile() {
   const [authError, setAuthError] = useState("");
   const [authLoading, setAuthLoading] = useState(false);
 
+  // ── 2FA state (pending login) ──
+  const [twoFaPending, setTwoFaPending] = useState<string | null>(null); // username waiting for 2fa code
+  const [twoFaCode, setTwoFaCode] = useState("");
+  const [twoFaError, setTwoFaError] = useState("");
+  const [twoFaLoading, setTwoFaLoading] = useState(false);
+
+  // ── email / 2fa settings in profile ──
+  const [profileEmail, setProfileEmail] = useState<string | null>(null);
+  const [profileTwoFa, setProfileTwoFa] = useState(false);
+  const [emailInput, setEmailInput] = useState("");
+  const [emailCodeInput, setEmailCodeInput] = useState("");
+  const [emailStep, setEmailStep] = useState<"idle" | "code">("idle");
+  const [emailLoading, setEmailLoading] = useState(false);
+  const [emailError, setEmailError] = useState("");
+  const [emailSuccess, setEmailSuccess] = useState("");
+
   // ── edit profile state ──
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(profile.name);
@@ -220,7 +236,11 @@ export default function Profile() {
       body: JSON.stringify({ username: session.username, token: session.token }),
     }).then((r) => r.json()).then((data) => {
       if (!data.ok) { setSession(null); setProfile(defaultProfile); }
-      else setProfile({ name: data.name, username: data.username, bio: data.bio || "", avatar: data.avatar });
+      else {
+        setProfile({ name: data.name, username: data.username, bio: data.bio || "", avatar: data.avatar });
+        setProfileEmail(data.email || null);
+        setProfileTwoFa(!!data.two_fa);
+      }
     }).catch(() => { /* offline — keep session */ });
   }, []);
 
@@ -278,11 +298,85 @@ export default function Profile() {
       });
       const data = await res.json();
       if (!res.ok) { setAuthError(data.error || "Ошибка"); return; }
+      if (data.two_fa) {
+        setTwoFaPending(data.username);
+        setTwoFaCode(""); setTwoFaError("");
+        setAuthMode("none");
+        return;
+      }
       setSession({ username: data.username, token: data.token });
       setProfile({ name: data.name, username: data.username, bio: data.bio || "", avatar: data.avatar });
       setAuthMode("none");
     } catch (_) { setAuthError("Нет соединения"); }
     finally { setAuthLoading(false); }
+  };
+
+  // ── Verify 2FA ──
+  const doVerify2fa = async () => {
+    if (!twoFaPending || !twoFaCode.trim()) return;
+    setTwoFaLoading(true); setTwoFaError("");
+    try {
+      const res = await fetch(`${FRIENDS_API}?action=verify_2fa`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: twoFaPending, code: twoFaCode.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setTwoFaError(data.error || "Неверный код"); return; }
+      setSession({ username: data.username, token: data.token });
+      setProfile({ name: data.name, username: data.username, bio: data.bio || "", avatar: data.avatar });
+      setTwoFaPending(null); setTwoFaCode("");
+    } catch (_) { setTwoFaError("Нет соединения"); }
+    finally { setTwoFaLoading(false); }
+  };
+
+  // ── Email connect ──
+  const sendEmailCode = async () => {
+    if (!emailInput.trim() || !session) return;
+    setEmailLoading(true); setEmailError(""); setEmailSuccess("");
+    try {
+      const res = await fetch(`${FRIENDS_API}?action=send_connect_email_code`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: session.username, token: session.token, email: emailInput.trim().toLowerCase() }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setEmailError(data.error || "Ошибка"); return; }
+      setEmailStep("code"); setEmailSuccess("Код отправлен на почту");
+    } catch (_) { setEmailError("Нет соединения"); }
+    finally { setEmailLoading(false); }
+  };
+
+  const confirmEmail = async () => {
+    if (!emailCodeInput.trim() || !session) return;
+    setEmailLoading(true); setEmailError(""); setEmailSuccess("");
+    try {
+      const res = await fetch(`${FRIENDS_API}?action=confirm_email`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: session.username, token: session.token, email: emailInput.trim().toLowerCase(), code: emailCodeInput.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setEmailError(data.error || "Неверный код"); return; }
+      setProfileEmail(emailInput.trim().toLowerCase());
+      setEmailStep("idle"); setEmailInput(""); setEmailCodeInput("");
+      setEmailSuccess("Почта подключена!");
+    } catch (_) { setEmailError("Нет соединения"); }
+    finally { setEmailLoading(false); }
+  };
+
+  const toggleTwoFa = async (enable: boolean) => {
+    if (!session) return;
+    setEmailLoading(true); setEmailError(""); setEmailSuccess("");
+    try {
+      const res = await fetch(`${FRIENDS_API}?action=toggle_2fa`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: session.username, token: session.token, enabled: enable }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setEmailError(data.error || "Ошибка"); return; }
+      setProfileTwoFa(enable);
+      setEmailSuccess(enable ? "Двухэтапная авторизация включена" : "Двухэтапная авторизация отключена");
+    } catch (_) { setEmailError("Нет соединения"); }
+    finally { setEmailLoading(false); }
   };
 
   // ── Save edit ──
@@ -321,6 +415,63 @@ export default function Profile() {
     } catch (_) { setFriendError("Нет соединения"); }
     finally { setFriendLoading(false); }
   };
+
+  // ── 2FA code screen ──
+  if (twoFaPending) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex flex-col" style={{ fontFamily: "'Golos Text', sans-serif" }}>
+        <header className="sticky top-0 z-10 bg-white/95 backdrop-blur border-b border-gray-100">
+          <div className="max-w-2xl mx-auto px-4 py-3 flex items-center gap-3">
+            <BotAvatar size={44} />
+            <div className="flex-1 min-w-0">
+              <div className="font-semibold text-gray-900 text-base leading-tight">Семицвет AI 2.0</div>
+              <div className="text-xs font-medium" style={{ color: "#7B61FF" }}>Голосовой помощник</div>
+            </div>
+          </div>
+          {NAV_TABS(navigate, "/profile", friendsBadge)}
+        </header>
+        <div className="flex-1 flex items-center justify-center px-4 py-8">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-sm border border-gray-100">
+            <div className="text-center mb-5">
+              <div className="w-14 h-14 rounded-full mx-auto mb-3 flex items-center justify-center" style={{ background: "linear-gradient(135deg, #7B61FF, #A78BFA)" }}>
+                <Icon name="Mail" size={24} className="text-white" />
+              </div>
+              <h2 className="font-semibold text-gray-900 text-base">Подтверждение входа</h2>
+              <p className="text-xs text-gray-400 mt-1">На вашу почту отправлен 6-значный код. Введите его ниже</p>
+            </div>
+            <div className="space-y-3">
+              <input
+                type="text"
+                inputMode="numeric"
+                maxLength={6}
+                value={twoFaCode}
+                onChange={(e) => { setTwoFaCode(e.target.value.replace(/\D/g, "")); setTwoFaError(""); }}
+                onKeyDown={(e) => { if (e.key === "Enter") doVerify2fa(); }}
+                placeholder="000000"
+                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-2xl text-center font-bold tracking-widest text-gray-800 outline-none focus:border-purple-300 transition-all"
+                autoFocus
+              />
+              {twoFaError && (
+                <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-red-50 border border-red-100">
+                  <Icon name="AlertCircle" size={14} className="text-red-400 flex-shrink-0" />
+                  <p className="text-xs text-red-500">{twoFaError}</p>
+                </div>
+              )}
+              <button onClick={doVerify2fa} disabled={twoFaLoading || twoFaCode.length !== 6}
+                className="w-full py-2.5 rounded-xl text-sm font-medium text-white disabled:opacity-50 active:scale-95 transition-all"
+                style={{ background: "linear-gradient(135deg, #7B61FF, #A78BFA)" }}>
+                {twoFaLoading ? "Проверка..." : "Подтвердить"}
+              </button>
+              <button onClick={() => { setTwoFaPending(null); setTwoFaCode(""); }}
+                className="w-full py-2 text-xs text-gray-400 hover:text-gray-600 transition-colors">
+                Отмена
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // ── Auth form ──
   if (authMode !== "none") {
@@ -492,8 +643,69 @@ export default function Profile() {
                 <textarea value={editBio} onChange={(e) => setEditBio(e.target.value)} placeholder="Пару слов о вас..." rows={2}
                   className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-purple-300 focus:bg-white transition-all resize-none" />
               </div>
+              {/* Email & 2FA block */}
+              <div className="pt-1 border-t border-gray-100 space-y-2">
+                <label className="text-xs text-gray-400 block">Почта для двухэтапной авторизации</label>
+                {profileEmail ? (
+                  <div className="flex items-center gap-2 px-3 py-2 bg-green-50 rounded-xl">
+                    <Icon name="Mail" size={14} className="text-green-500 flex-shrink-0" />
+                    <span className="text-sm text-green-700 flex-1 truncate">{profileEmail}</span>
+                    <Icon name="CheckCircle" size={14} className="text-green-500" />
+                  </div>
+                ) : emailStep === "idle" ? (
+                  <div className="flex gap-2">
+                    <input type="email" value={emailInput} onChange={(e) => { setEmailInput(e.target.value); setEmailError(""); }}
+                      placeholder="your@email.com"
+                      className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-800 outline-none focus:border-purple-300 transition-all" />
+                    <button onClick={sendEmailCode} disabled={emailLoading || !emailInput.trim()}
+                      className="px-3 py-2 rounded-xl text-sm font-medium text-white disabled:opacity-50 transition-all"
+                      style={{ background: "linear-gradient(135deg, #7B61FF, #A78BFA)" }}>
+                      {emailLoading ? "..." : "Код"}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="flex gap-2">
+                      <input type="text" inputMode="numeric" maxLength={6} value={emailCodeInput}
+                        onChange={(e) => { setEmailCodeInput(e.target.value.replace(/\D/g, "")); setEmailError(""); }}
+                        onKeyDown={(e) => { if (e.key === "Enter") confirmEmail(); }}
+                        placeholder="6-значный код"
+                        className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm text-center font-bold tracking-widest text-gray-800 outline-none focus:border-purple-300 transition-all" />
+                      <button onClick={confirmEmail} disabled={emailLoading || emailCodeInput.length !== 6}
+                        className="px-3 py-2 rounded-xl text-sm font-medium text-white disabled:opacity-50"
+                        style={{ background: "linear-gradient(135deg, #7B61FF, #A78BFA)" }}>
+                        {emailLoading ? "..." : "OK"}
+                      </button>
+                    </div>
+                    <button onClick={() => { setEmailStep("idle"); setEmailCodeInput(""); }} className="text-xs text-gray-400 hover:text-gray-600">← Назад</button>
+                  </div>
+                )}
+                {emailError && <p className="text-xs text-red-500">{emailError}</p>}
+                {emailSuccess && <p className="text-xs text-green-600">{emailSuccess}</p>}
+
+                {profileEmail && (
+                  <div className="flex gap-2 pt-1">
+                    <button
+                      onClick={() => toggleTwoFa(true)}
+                      disabled={emailLoading || profileTwoFa}
+                      className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-sm font-medium transition-all disabled:opacity-40"
+                      style={profileTwoFa ? { background: "#f0fdf4", color: "#16a34a", border: "1px solid #bbf7d0" } : { background: "linear-gradient(135deg, #7B61FF, #A78BFA)", color: "white" }}>
+                      <Icon name="Check" size={14} />
+                      {profileTwoFa ? "2FA включена" : "Включить 2FA"}
+                    </button>
+                    <button
+                      onClick={() => toggleTwoFa(false)}
+                      disabled={emailLoading || !profileTwoFa}
+                      className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-sm font-medium border border-gray-200 text-gray-500 transition-all disabled:opacity-40">
+                      <Icon name="X" size={14} />
+                      Отключить 2FA
+                    </button>
+                  </div>
+                )}
+              </div>
+
               <div className="flex gap-2 pt-1">
-                <button onClick={() => setIsEditing(false)} className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-500">Отмена</button>
+                <button onClick={() => { setIsEditing(false); setEmailStep("idle"); setEmailError(""); setEmailSuccess(""); }} className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-500">Отмена</button>
                 <button onClick={saveEdit} disabled={!editName.trim()} className="flex-1 py-2.5 rounded-xl text-sm font-medium text-white disabled:opacity-40 active:scale-95 transition-all"
                   style={{ background: "linear-gradient(135deg, #7B61FF, #A78BFA)" }}>Сохранить</button>
               </div>
