@@ -142,6 +142,11 @@ export default function Profile() {
   const [adminResult, setAdminResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [bannedList, setBannedList] = useState<{ username: string; name: string; avatar: string }[]>([]);
   const [bannedLoading, setBannedLoading] = useState(false);
+  const [banlistUnbanTarget, setBanlistUnbanTarget] = useState("");
+
+  // draggable LP button
+  const [btnPos, setBtnPos] = useState({ x: 24, y: 24 });
+  const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number; dragging: boolean }>({ startX: 0, startY: 0, origX: 24, origY: 24, dragging: false });
 
   const isAdmin = profile.username === "lavroviylist";
 
@@ -670,12 +675,33 @@ export default function Profile() {
         </div>
       )}
 
-      {/* Admin LP button */}
+      {/* Admin LP button — draggable */}
       {isAdmin && (
         <button
-          onClick={() => { setShowAdmin(true); setAdminResult(null); }}
-          className="fixed top-6 left-6 z-40 w-12 h-12 rounded-2xl shadow-lg text-white text-sm font-bold tracking-tight transition-all active:scale-95 hover:shadow-xl"
-          style={{ background: "linear-gradient(135deg, #1a1a2e, #16213e)" }}
+          onPointerDown={(e) => {
+            dragRef.current = { startX: e.clientX, startY: e.clientY, origX: btnPos.x, origY: btnPos.y, dragging: false };
+            const onMove = (ev: PointerEvent) => {
+              const dx = ev.clientX - dragRef.current.startX;
+              const dy = ev.clientY - dragRef.current.startY;
+              if (Math.abs(dx) > 4 || Math.abs(dy) > 4) dragRef.current.dragging = true;
+              if (dragRef.current.dragging) {
+                setBtnPos({
+                  x: Math.max(0, Math.min(window.innerWidth - 48, dragRef.current.origX + dx)),
+                  y: Math.max(0, Math.min(window.innerHeight - 48, dragRef.current.origY + dy)),
+                });
+              }
+            };
+            const onUp = () => {
+              window.removeEventListener("pointermove", onMove);
+              window.removeEventListener("pointerup", onUp);
+            };
+            window.addEventListener("pointermove", onMove);
+            window.addEventListener("pointerup", onUp);
+            e.currentTarget.setPointerCapture(e.pointerId);
+          }}
+          onClick={() => { if (!dragRef.current.dragging) { setShowAdmin(true); setAdminResult(null); } }}
+          className="fixed z-40 w-12 h-12 rounded-2xl shadow-lg text-white text-sm font-bold tracking-tight hover:shadow-xl select-none"
+          style={{ background: "linear-gradient(135deg, #1a1a2e, #16213e)", left: btnPos.x, top: btnPos.y, touchAction: "none" }}
         >
           LP
         </button>
@@ -683,7 +709,7 @@ export default function Profile() {
 
       {/* Admin panel modal */}
       {showAdmin && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center px-4 pb-4 sm:items-center" style={{ background: "rgba(0,0,0,0.5)" }} onClick={() => setShowAdmin(false)}>
+        <div className="fixed inset-0 z-50 flex items-start justify-center px-4 pt-20" style={{ background: "rgba(0,0,0,0.5)" }} onClick={() => setShowAdmin(false)}>
           <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
             {/* Header */}
             <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-gray-100"
@@ -759,7 +785,30 @@ export default function Profile() {
               )}
 
               {adminTab === "banlist" && (
-                <div className="flex flex-col gap-2 max-h-60 overflow-y-auto">
+                <div className="flex flex-col gap-2">
+                  {/* Quick unban input */}
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">@</span>
+                      <input
+                        type="text"
+                        value={banlistUnbanTarget}
+                        onChange={(e) => setBanlistUnbanTarget(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter" && banlistUnbanTarget.trim()) { adminBan(true, banlistUnbanTarget.trim()); setBanlistUnbanTarget(""); } }}
+                        placeholder="username"
+                        className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-7 pr-3 py-2 text-sm text-gray-800 outline-none focus:border-green-300 transition-all"
+                      />
+                    </div>
+                    <button
+                      onClick={() => { adminBan(true, banlistUnbanTarget.trim()); setBanlistUnbanTarget(""); }}
+                      disabled={adminLoading || !banlistUnbanTarget.trim()}
+                      className="px-3 py-2 rounded-xl bg-green-400 text-white text-xs font-semibold disabled:opacity-50 flex items-center gap-1"
+                    >
+                      <Icon name="Check" size={13} />
+                      Разбанить
+                    </button>
+                  </div>
+                  <div className="flex flex-col gap-2 max-h-52 overflow-y-auto">
                   {bannedLoading && (
                     <div className="text-center text-sm text-gray-400 py-4">Загрузка...</div>
                   )}
@@ -789,6 +838,7 @@ export default function Profile() {
                       </button>
                     </div>
                   ))}
+                  </div>
                 </div>
               )}
 
