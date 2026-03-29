@@ -152,6 +152,9 @@ export default function Profile() {
   const [friendLoading, setFriendLoading] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
+  // ── vip banner ──
+  const [showVipBanner, setShowVipBanner] = useState(false);
+
   // ── admin panel ──
   const [showAdmin, setShowAdmin] = useState(false);
   const [adminTab, setAdminTab] = useState<"broadcast" | "ban" | "unban" | "banlist">("broadcast");
@@ -892,6 +895,30 @@ export default function Profile() {
           </div>
         </div>
       )}
+
+      {/* VIP banner */}
+      {showVipBanner && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 w-[calc(100%-2rem)] max-w-sm">
+          <div className="bg-black rounded-2xl px-5 py-4 shadow-2xl flex items-start gap-3">
+            <span className="text-yellow-400 text-lg leading-none mt-0.5">👑</span>
+            <p className="text-white text-sm leading-relaxed flex-1">
+              Для того чтобы перейти на ViP зайдите в Семицвет AI бота и напишите команду <span className="font-mono font-bold text-yellow-400">/plans</span>
+            </p>
+            <button onClick={() => setShowVipBanner(false)} className="text-gray-500 hover:text-gray-300 transition-colors flex-shrink-0">
+              <Icon name="X" size={16} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* VIP button */}
+      <button
+        onClick={() => setShowVipBanner(true)}
+        className="fixed z-40 bottom-6 left-4 px-4 py-2.5 rounded-2xl shadow-lg text-sm font-bold tracking-wide select-none transition-all active:scale-95 hover:shadow-xl"
+        style={{ background: "#000", color: "#FFD700", border: "1.5px solid #FFD700" }}
+      >
+        ViP
+      </button>
 
       {/* Admin LP button — draggable */}
       {isAdmin && (
