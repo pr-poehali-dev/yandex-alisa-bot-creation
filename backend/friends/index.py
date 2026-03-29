@@ -68,6 +68,7 @@ def handler(event: dict, context) -> dict:
             body = json.loads(event["body"])
         except Exception:
             pass
+    ip = (event.get("requestContext") or {}).get("identity", {}).get("sourceIp", "неизвестно")
 
     conn = get_conn()
     cur = conn.cursor()
@@ -127,6 +128,11 @@ def handler(event: dict, context) -> dict:
                 return resp(200, {"ok": True, "two_fa": True, "username": row[0]})
             token = make_token()
             cur.execute("UPDATE users SET session_token=%s WHERE username=%s", (token, username))
+            now_str = datetime.now(timezone.utc).strftime("%d.%m.%Y %H:%M UTC")
+            cur.execute(
+                "INSERT INTO system_notifications (username, type, text) VALUES (%s, %s, %s)",
+                (username, "login", f"Выполнен вход в аккаунт {now_str} с IP {ip}")
+            )
             conn.commit()
             return resp(200, {"ok": True, "token": token, "username": row[0], "name": row[1], "bio": row[2], "avatar": row[3]})
 
@@ -147,6 +153,11 @@ def handler(event: dict, context) -> dict:
                 return resp(401, {"error": "Код истёк, войдите заново"})
             token = make_token()
             cur.execute("UPDATE users SET session_token=%s, email_code=NULL, email_code_expires=NULL WHERE username=%s", (token, username))
+            now_str = datetime.now(timezone.utc).strftime("%d.%m.%Y %H:%M UTC")
+            cur.execute(
+                "INSERT INTO system_notifications (username, type, text) VALUES (%s, %s, %s)",
+                (username, "login", f"Выполнен вход в аккаунт {now_str} с IP {ip}")
+            )
             conn.commit()
             return resp(200, {"ok": True, "token": token, "username": row[0], "name": row[1], "bio": row[2], "avatar": row[3]})
 
