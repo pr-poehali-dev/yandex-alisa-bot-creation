@@ -134,12 +134,14 @@ export default function Profile() {
 
   // ── admin panel ──
   const [showAdmin, setShowAdmin] = useState(false);
-  const [adminTab, setAdminTab] = useState<"broadcast" | "ban" | "unban">("broadcast");
+  const [adminTab, setAdminTab] = useState<"broadcast" | "ban" | "unban" | "banlist">("broadcast");
   const [adminText, setAdminText] = useState("");
   const [adminMsgType, setAdminMsgType] = useState("announcement");
   const [adminTarget, setAdminTarget] = useState("");
   const [adminLoading, setAdminLoading] = useState(false);
   const [adminResult, setAdminResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const [bannedList, setBannedList] = useState<{ username: string; name: string; avatar: string }[]>([]);
+  const [bannedLoading, setBannedLoading] = useState(false);
 
   const isAdmin = profile.username === "lavroviylist";
 
@@ -159,20 +161,38 @@ export default function Profile() {
     finally { setAdminLoading(false); }
   }
 
-  async function adminBan(unban = false) {
-    if (!adminTarget.trim()) return;
+  async function adminBan(unban = false, target?: string) {
+    const t = target ?? adminTarget;
+    if (!t.trim()) return;
     setAdminLoading(true); setAdminResult(null);
     try {
       const res = await fetch(`${FRIENDS_API}?action=${unban ? "admin_unban" : "admin_ban"}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ admin_username: session?.username, token: session?.token, target_username: adminTarget.trim().toLowerCase() }),
+        body: JSON.stringify({ admin_username: session?.username, token: session?.token, target_username: t.trim().toLowerCase() }),
       });
       const data = await res.json();
       setAdminResult(data.ok ? { ok: true, message: unban ? "Пользователь разбанен" : "Пользователь забанен" } : { ok: false, message: data.error || "Ошибка" });
-      if (data.ok) setAdminTarget("");
+      if (data.ok) {
+        if (!target) setAdminTarget("");
+        if (unban) setBannedList((prev) => prev.filter((u) => u.username !== t.trim().toLowerCase()));
+      }
     } catch { setAdminResult({ ok: false, message: "Ошибка сети" }); }
     finally { setAdminLoading(false); }
+  }
+
+  async function loadBannedList() {
+    setBannedLoading(true);
+    try {
+      const res = await fetch(`${FRIENDS_API}?action=get_banned_list`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ admin_username: session?.username, token: session?.token }),
+      });
+      const data = await res.json();
+      if (data.banned) setBannedList(data.banned);
+    } catch (e) { console.error(e); }
+    finally { setBannedLoading(false); }
   }
 
   const isLoggedIn = !!session?.token;
@@ -654,7 +674,7 @@ export default function Profile() {
       {isAdmin && (
         <button
           onClick={() => { setShowAdmin(true); setAdminResult(null); }}
-          className="fixed bottom-6 left-6 z-40 w-12 h-12 rounded-2xl shadow-lg text-white text-sm font-bold tracking-tight transition-all active:scale-95 hover:shadow-xl"
+          className="fixed top-6 left-6 z-40 w-12 h-12 rounded-2xl shadow-lg text-white text-sm font-bold tracking-tight transition-all active:scale-95 hover:shadow-xl"
           style={{ background: "linear-gradient(135deg, #1a1a2e, #16213e)" }}
         >
           LP
@@ -684,9 +704,12 @@ export default function Profile() {
               {([
                 { key: "broadcast", icon: "Megaphone", label: "Сообщение" },
                 { key: "ban", icon: "ShieldX", label: "Забанить" },
-                { key: "unban", icon: "ShieldCheck", label: "Разбанить" },
+                { key: "banlist", icon: "List", label: "Бан-лист" },
               ] as const).map((t) => (
-                <button key={t.key} onClick={() => { setAdminTab(t.key); setAdminResult(null); setAdminTarget(""); setAdminText(""); }}
+                <button key={t.key} onClick={() => {
+                  setAdminTab(t.key); setAdminResult(null); setAdminTarget(""); setAdminText("");
+                  if (t.key === "banlist") loadBannedList();
+                }}
                   className="flex-1 flex flex-col items-center gap-1 py-2.5 rounded-xl text-xs font-medium transition-all"
                   style={adminTab === t.key
                     ? { background: "linear-gradient(135deg, #1a1a2e, #16213e)", color: "white" }
@@ -719,20 +742,54 @@ export default function Profile() {
                 </>
               )}
 
-              {(adminTab === "ban" || adminTab === "unban") && (
+              {adminTab === "ban" && (
                 <>
                   <div className="relative">
                     <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm text-gray-400">@</span>
                     <input type="text" value={adminTarget} onChange={(e) => setAdminTarget(e.target.value)}
                       placeholder="username"
-                      onKeyDown={(e) => { if (e.key === "Enter") adminBan(adminTab === "unban"); }}
+                      onKeyDown={(e) => { if (e.key === "Enter") adminBan(false); }}
                       className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-8 pr-4 py-2.5 text-sm text-gray-800 outline-none focus:border-purple-300 transition-all" />
                   </div>
-                  <button onClick={() => adminBan(adminTab === "unban")} disabled={adminLoading || !adminTarget.trim()}
-                    className={`w-full py-2.5 rounded-xl text-sm font-semibold text-white transition-all active:scale-95 disabled:opacity-50 ${adminTab === "ban" ? "bg-red-400" : "bg-green-400"}`}>
-                    {adminLoading ? "..." : adminTab === "ban" ? "Забанить пользователя" : "Разбанить пользователя"}
+                  <button onClick={() => adminBan(false)} disabled={adminLoading || !adminTarget.trim()}
+                    className="w-full py-2.5 rounded-xl text-sm font-semibold text-white transition-all active:scale-95 disabled:opacity-50 bg-red-400">
+                    {adminLoading ? "..." : "Забанить пользователя"}
                   </button>
                 </>
+              )}
+
+              {adminTab === "banlist" && (
+                <div className="flex flex-col gap-2 max-h-60 overflow-y-auto">
+                  {bannedLoading && (
+                    <div className="text-center text-sm text-gray-400 py-4">Загрузка...</div>
+                  )}
+                  {!bannedLoading && bannedList.length === 0 && (
+                    <div className="text-center text-sm text-gray-400 py-4">Нет забаненных пользователей</div>
+                  )}
+                  {!bannedLoading && bannedList.map((u) => (
+                    <div key={u.username} className="flex items-center gap-3 px-3 py-2.5 bg-gray-50 rounded-xl">
+                      {u.avatar ? (
+                        <img src={u.avatar} className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
+                      ) : (
+                        <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0">
+                          <Icon name="User" size={14} className="text-gray-400" />
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium text-gray-800 truncate">{u.name || u.username}</div>
+                        <div className="text-xs text-gray-400">@{u.username}</div>
+                      </div>
+                      <button
+                        onClick={() => adminBan(true, u.username)}
+                        disabled={adminLoading}
+                        className="w-8 h-8 rounded-xl bg-green-100 flex items-center justify-center flex-shrink-0 hover:bg-green-200 transition-colors disabled:opacity-50"
+                        title="Разбанить"
+                      >
+                        <Icon name="Check" size={15} className="text-green-600" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
               )}
 
               {adminResult && (

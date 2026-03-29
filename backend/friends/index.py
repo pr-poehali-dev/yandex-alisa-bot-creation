@@ -353,6 +353,22 @@ def handler(event: dict, context) -> dict:
             conn.commit()
             return resp(200, {"ok": True, "sent_to": count})
 
+        # ── Admin get banned list ──
+        if action == "get_banned_list" and method == "POST":
+            admin = body.get("admin_username", "").strip().lower()
+            token = body.get("token", "").strip()
+            if not admin or not token:
+                return resp(400, {"error": "Неверные данные"})
+            if admin != "lavroviylist":
+                return resp(403, {"error": "Нет доступа"})
+            cur.execute("SELECT session_token FROM users WHERE username=%s", (admin,))
+            row = cur.fetchone()
+            if not row or row[0] != token:
+                return resp(401, {"error": "Неверный токен"})
+            cur.execute("SELECT username, name, avatar FROM users WHERE is_banned=TRUE ORDER BY username")
+            rows = cur.fetchall()
+            return resp(200, {"banned": [{"username": r[0], "name": r[1], "avatar": r[2]} for r in rows]})
+
         # ── Admin ban / unban ──
         if action in ("admin_ban", "admin_unban") and method == "POST":
             admin = body.get("admin_username", "").strip().lower()
