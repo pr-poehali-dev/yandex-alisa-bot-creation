@@ -60,6 +60,24 @@
       "expectedStatus": 403,
       "expectedBody": {"error": "Нет доступа"},
       "bodyMatcher": "partial"
+    },
+    {
+      "name": "Set VIP - no access",
+      "method": "POST",
+      "path": "/?action=set_vip",
+      "body": {"admin_username": "testauth99", "token": "fake", "target_username": "someone", "vip": true},
+      "expectedStatus": 403,
+      "expectedBody": {"error": "Нет доступа"},
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Change username - not vip",
+      "method": "POST",
+      "path": "/?action=change_username",
+      "body": {"username": "testauth99", "token": "fake", "new_username": "newtestname99"},
+      "expectedStatus": 401,
+      "expectedBody": {},
+      "bodyMatcher": "partial"
     }
   ]
 }

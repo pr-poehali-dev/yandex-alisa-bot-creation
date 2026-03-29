@@ -88,9 +88,18 @@ const TypingIndicator = () => (
   </div>
 );
 
+function getChatUser() {
+  try {
+    const p = JSON.parse(localStorage.getItem("semitsvet_profile") || "null");
+    const s = JSON.parse(localStorage.getItem("semitsvet_session") || "null");
+    return { name: p?.name || "", isVip: !!s?.is_vip };
+  } catch { return { name: "", isVip: false }; }
+}
+
 export default function Index() {
   const navigate = useNavigate();
   const [friendsBadge, setFriendsBadge] = useState(getFriendsBadge);
+  const [chatUser] = useState(getChatUser);
   useEffect(() => {
     const h = () => setFriendsBadge(getFriendsBadge());
     window.addEventListener("friends-badge-update", h);
@@ -218,6 +227,15 @@ export default function Index() {
               Голосовой помощник
             </div>
           </div>
+          {chatUser.name && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-sm text-gray-600 font-medium truncate max-w-24">{chatUser.name}</span>
+              {chatUser.isVip && (
+                <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-bold tracking-wide flex-shrink-0"
+                  style={{ background: "linear-gradient(135deg, #FFD700, #FFA500)", color: "#000" }}>ViP</span>
+              )}
+            </div>
+          )}
           <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-green-50">
             <span className="w-1.5 h-1.5 rounded-full bg-green-400 inline-block" />
             <span className="text-xs text-green-600 font-medium">онлайн</span>

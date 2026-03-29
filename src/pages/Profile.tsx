@@ -96,7 +96,7 @@ export default function Profile() {
   }, []);
 
   // ── session: { username, token }
-  const [session, setSession] = useState<{ username: string; token: string; role?: string } | null>(() => {
+  const [session, setSession] = useState<{ username: string; token: string; role?: string; is_vip?: boolean } | null>(() => {
     try { return JSON.parse(localStorage.getItem(SESSION_KEY) || "null"); } catch { return null; }
   });
 
@@ -172,6 +172,36 @@ export default function Profile() {
   const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number; dragging: boolean }>({ startX: 0, startY: 0, origX: 24, origY: 24, dragging: false });
 
   const isAdmin = profile.username === "lavroviylist";
+  const isVip = !!session?.is_vip;
+
+  // ── change username (VIP) ──
+  const [showChangeUsername, setShowChangeUsername] = useState(false);
+  const [newUsername, setNewUsername] = useState("");
+  const [changeUsernameLoading, setChangeUsernameLoading] = useState(false);
+  const [changeUsernameError, setChangeUsernameError] = useState("");
+
+  async function doChangeUsername() {
+    if (!newUsername.trim() || !session) return;
+    setChangeUsernameLoading(true);
+    setChangeUsernameError("");
+    try {
+      const res = await fetch(`${FRIENDS_API}?action=change_username`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: session.username, token: session.token, new_username: newUsername.trim().toLowerCase() }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setSession(null);
+        localStorage.removeItem(SESSION_KEY);
+        setProfile(defaultProfile);
+        setShowChangeUsername(false);
+      } else {
+        setChangeUsernameError(data.error || "Ошибка");
+      }
+    } catch { setChangeUsernameError("Ошибка сети"); }
+    finally { setChangeUsernameLoading(false); }
+  }
 
   async function adminBroadcast() {
     if (!adminText.trim()) return;
@@ -245,7 +275,7 @@ export default function Profile() {
       if (!data.ok) { setSession(null); setProfile(defaultProfile); }
       else {
         if (data.banned) { setIsBanned(true); return; }
-        setSession((s) => s ? { ...s, role: data.role || "member" } : s);
+        setSession((s) => s ? { ...s, role: data.role || "member", is_vip: !!data.is_vip } : s);
         setProfile({ name: data.name, username: data.username, bio: data.bio || "", avatar: data.avatar });
         setProfileEmail(data.email || null);
         setProfileTwoFa(!!data.two_fa);
@@ -739,8 +769,22 @@ export default function Profile() {
                   <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-gray-900">{profile.name}</p>
-                  {profile.username && <p className="text-sm font-medium" style={{ color: "#7B61FF" }}>@{profile.username}</p>}
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <p className="font-semibold text-gray-900">{profile.name}</p>
+                    {isVip && (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-bold tracking-wide"
+                        style={{ background: "linear-gradient(135deg, #FFD700, #FFA500)", color: "#000" }}>ViP</span>
+                    )}
+                  </div>
+                  {profile.username && (
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-sm font-medium" style={{ color: "#7B61FF" }}>@{profile.username}</p>
+                      {isVip && (
+                        <span className="text-[10px] font-bold tracking-wide"
+                          style={{ background: "linear-gradient(135deg, #FFD700, #FFA500)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>ViP</span>
+                      )}
+                    </div>
+                  )}
                   {profile.bio && <p className="text-sm text-gray-400 mt-0.5 line-clamp-2">{profile.bio}</p>}
                 </div>
               </div>
@@ -749,6 +793,13 @@ export default function Profile() {
                   className="flex-1 flex items-center justify-center gap-2 py-2 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-all">
                   <Icon name="Pencil" size={14} />Изменить
                 </button>
+                {isVip && (
+                  <button onClick={() => { setShowChangeUsername(true); setNewUsername(""); setChangeUsernameError(""); }}
+                    className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all active:scale-95"
+                    style={{ background: "linear-gradient(135deg, #FFD700, #FFA500)", color: "#000" }}>
+                    <Icon name="AtSign" size={13} />@
+                  </button>
+                )}
                 <button onClick={() => setShowAddFriend(true)}
                   className="flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-sm font-medium text-white transition-all active:scale-95"
                   style={{ background: "linear-gradient(135deg, #7B61FF, #A78BFA)" }}>
@@ -891,6 +942,39 @@ export default function Profile() {
             <div className="flex gap-2">
               <button onClick={() => setDeleteConfirmId(null)} className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-500">Отмена</button>
               <button onClick={() => deleteChat(deleteConfirmId)} className="flex-1 py-2.5 rounded-xl bg-red-400 text-sm font-medium text-white">Удалить</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Change username modal (VIP) */}
+      {showChangeUsername && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4" style={{ background: "rgba(0,0,0,0.5)" }} onClick={() => setShowChangeUsername(false)}>
+          <div className="bg-white rounded-2xl p-6 max-w-xs w-full shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-2 mb-4">
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-bold"
+                style={{ background: "linear-gradient(135deg, #FFD700, #FFA500)", color: "#000" }}>ViP</span>
+              <p className="font-semibold text-gray-900 text-base">Сменить юзернейм</p>
+            </div>
+            <p className="text-xs text-gray-400 mb-4">После смены вы выйдете из аккаунта — войдите заново с новым юзернеймом</p>
+            <input
+              value={newUsername}
+              onChange={(e) => { setNewUsername(e.target.value); setChangeUsernameError(""); }}
+              onKeyDown={(e) => { if (e.key === "Enter") doChangeUsername(); }}
+              placeholder="новый_юзернейм"
+              maxLength={20}
+              className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-yellow-400 transition-all mb-3"
+            />
+            {changeUsernameError && (
+              <p className="text-xs text-red-500 mb-3">{changeUsernameError}</p>
+            )}
+            <div className="flex gap-2">
+              <button onClick={() => setShowChangeUsername(false)} className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-500">Отмена</button>
+              <button onClick={doChangeUsername} disabled={changeUsernameLoading || !newUsername.trim()}
+                className="flex-1 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-40 transition-all active:scale-95"
+                style={{ background: "linear-gradient(135deg, #FFD700, #FFA500)", color: "#000" }}>
+                {changeUsernameLoading ? "..." : "Сменить"}
+              </button>
             </div>
           </div>
         </div>

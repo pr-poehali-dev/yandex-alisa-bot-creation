@@ -18,6 +18,47 @@ interface UserItem {
   avatar: string | null;
   is_banned: boolean;
   role?: string;
+  is_vip?: boolean;
+}
+
+function VipBanListView({ me, session, FRIENDS_API }: { me: string; session: { token: string } | null; FRIENDS_API: string }) {
+  const [list, setList] = useState<UserItem[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch(`${FRIENDS_API}?action=get_banned_list`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ admin_username: me, token: session?.token }),
+    }).then((r) => r.json()).then((d) => setList(d.banned || [])).catch(() => setList([])).finally(() => setLoading(false));
+  }, []);
+
+  return (
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 flex flex-col overflow-hidden">
+      <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100">
+        <Icon name="Ban" size={15} className="text-red-400" />
+        <span className="font-semibold text-gray-800 text-sm">Бан лист {!loading && `(${list.length})`}</span>
+        <span className="ml-auto text-[10px] px-2 py-0.5 rounded-full bg-yellow-50 text-yellow-600 font-semibold">только просмотр</span>
+      </div>
+      <div className="px-4 py-3 flex flex-col gap-3 max-h-80 overflow-y-auto">
+        {loading ? (
+          <div className="flex justify-center py-6"><Icon name="Loader2" size={22} className="animate-spin text-gray-300" /></div>
+        ) : list.length === 0 ? (
+          <div className="text-center py-6 text-gray-400 text-sm">Нет забаненных пользователей</div>
+        ) : list.map((u) => (
+          <div key={u.username} className="flex items-center gap-3">
+            {u.avatar
+              ? <img src={u.avatar} className="w-9 h-9 rounded-full object-cover flex-shrink-0" />
+              : <div className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0"><Icon name="User" size={16} className="text-gray-400" /></div>}
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-gray-800 truncate">{u.name || u.username}</p>
+              <p className="text-xs text-gray-400">@{u.username}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export default function Admin() {
@@ -28,7 +69,9 @@ export default function Admin() {
   const me: string = profile?.username || "";
   const myRole: string = session?.role || "member";
   const isOwner = me === ADMIN_USERNAME;
+  const isVip = !!session?.is_vip;
   const isMod = isOwner || myRole === "moderator";
+  const hasAccess = isMod || isVip;
 
   const [tab, setTab] = useState(0);
 
@@ -54,6 +97,12 @@ export default function Admin() {
   const [rightsLoading, setRightsLoading] = useState(false);
   const [rightsResult, setRightsResult] = useState<{ ok: boolean; message: string } | null>(null);
 
+  // vip
+  const [vipTarget, setVipTarget] = useState("");
+  const [vipLoading, setVipLoading] = useState(false);
+  const [vipResult, setVipResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const [vipActionLoading, setVipActionLoading] = useState<string | null>(null);
+
   useEffect(() => {
     const handler = () => setFriendsBadgeState(getFriendsBadge());
     window.addEventListener("friends-badge-update", handler);
@@ -67,7 +116,7 @@ export default function Admin() {
     }
   }, [tab]);
 
-  if (!isMod) {
+  if (!hasAccess) {
     return (
       <div className="min-h-screen bg-gray-50 flex flex-col">
         <div className="sticky top-0 z-10 bg-white border-b border-gray-100 pt-4 pb-2">
@@ -167,13 +216,50 @@ export default function Admin() {
     finally { setRightsLoading(false); }
   }
 
+  async function setVipByInput(vip: boolean) {
+    const target = vipTarget.trim().toLowerCase();
+    if (!target) return;
+    setVipLoading(true);
+    setVipResult(null);
+    try {
+      const res = await fetch(`${FRIENDS_API}?action=set_vip`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ admin_username: me, token: session?.token, target_username: target, vip }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setVipResult({ ok: true, message: `@${target} → ${vip ? "ViP выдан" : "ViP снят"}` });
+        setVipTarget("");
+        setUserList((prev) => prev.map((u) => u.username === target ? { ...u, is_vip: vip } : u));
+      } else {
+        setVipResult({ ok: false, message: data.error || "Ошибка" });
+      }
+    } catch { setVipResult({ ok: false, message: "Ошибка сети" }); }
+    finally { setVipLoading(false); }
+  }
+
+  async function toggleVip(username: string, isVip: boolean) {
+    setVipActionLoading(username);
+    try {
+      await fetch(`${FRIENDS_API}?action=set_vip`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ admin_username: me, token: session?.token, target_username: username, vip: !isVip }),
+      });
+      setUserList((prev) => prev.map((u) => u.username === username ? { ...u, is_vip: !isVip } : u));
+    } finally { setVipActionLoading(null); }
+  }
+
   const filteredUsers = userList.filter((u) =>
     u.username.includes(userSearch.toLowerCase()) || u.name.toLowerCase().includes(userSearch.toLowerCase())
   );
 
-  const TABS = isOwner
-    ? [{ label: "Рассылка", icon: "Megaphone" }, { label: "Пользователи", icon: "Users" }]
-    : [{ label: "Действия", icon: "ShieldCheck" }, { label: "Пользователи", icon: "Users" }];
+  const TABS = isVip && !isMod
+    ? [{ label: "Бан лист", icon: "Ban" }]
+    : isOwner
+      ? [{ label: "Рассылка", icon: "Megaphone" }, { label: "Пользователи", icon: "Users" }]
+      : [{ label: "Действия", icon: "ShieldCheck" }, { label: "Пользователи", icon: "Users" }];
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
@@ -189,9 +275,11 @@ export default function Admin() {
             <Icon name="ShieldCheck" size={20} className="text-white" />
           </div>
           <div>
-            <h1 className="font-bold text-gray-900 text-lg leading-none">Панель администратора</h1>
+            <h1 className="font-bold text-gray-900 text-lg leading-none">
+              {isVip && !isMod ? "ViP панель" : "Панель администратора"}
+            </h1>
             <p className="text-xs text-gray-400 mt-0.5">
-              @{me} · {isOwner ? "Администратор" : "Модератор"}
+              @{me} · {isOwner ? "Администратор" : isMod ? "Модератор" : "ViP"}
             </p>
           </div>
         </div>
@@ -207,8 +295,13 @@ export default function Admin() {
           ))}
         </div>
 
-        {/* Tab 0 */}
-        {tab === 0 && (
+        {/* Tab 0 — VIP: inline ban list (read-only) */}
+        {tab === 0 && isVip && !isMod && (
+          <VipBanListView me={me} session={session} FRIENDS_API={FRIENDS_API} />
+        )}
+
+        {/* Tab 0 — Mod/Owner */}
+        {tab === 0 && isMod && (
           <>
             {/* Quick action buttons */}
             <div className="grid grid-cols-1 gap-2">
@@ -270,6 +363,7 @@ export default function Admin() {
           </>
         )}
 
+
         {/* Tab 1 — users + rights */}
         {tab === 1 && (
           <>
@@ -305,10 +399,14 @@ export default function Admin() {
                       ? <img src={u.avatar} className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
                       : <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0"><Icon name="User" size={14} className="text-gray-400" /></div>}
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5 flex-wrap">
                         <p className="text-sm font-medium text-gray-800 truncate">{u.name || u.username}</p>
                         {u.role === "moderator" && (
                           <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-500">мод</span>
+                        )}
+                        {u.is_vip && (
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+                            style={{ background: "linear-gradient(135deg, #FFD700, #FFA500)", color: "#000" }}>ViP</span>
                         )}
                         {u.is_banned && (
                           <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-red-50 text-red-400">бан</span>
@@ -317,12 +415,23 @@ export default function Admin() {
                       <p className="text-xs text-gray-400">@{u.username}</p>
                     </div>
                     {u.username !== me && (
-                      <button onClick={() => toggleBan(u.username, u.is_banned)} disabled={banActionLoading === u.username}
-                        className={`flex-shrink-0 px-3 py-1 rounded-lg text-xs font-semibold transition-all active:scale-95 disabled:opacity-50 ${u.is_banned ? "bg-green-50 text-green-600 hover:bg-green-100" : "bg-red-50 text-red-500 hover:bg-red-100"}`}>
-                        {banActionLoading === u.username
-                          ? <Icon name="Loader2" size={11} className="animate-spin" />
-                          : u.is_banned ? "Разбанить" : "Забанить"}
-                      </button>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        {isOwner && (
+                          <button onClick={() => toggleVip(u.username, !!u.is_vip)} disabled={vipActionLoading === u.username}
+                            className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-all active:scale-95 disabled:opacity-50`}
+                            style={u.is_vip ? { background: "#f3f4f6", color: "#6b7280" } : { background: "linear-gradient(135deg, #FFD700, #FFA500)", color: "#000" }}>
+                            {vipActionLoading === u.username
+                              ? <Icon name="Loader2" size={10} className="animate-spin" />
+                              : u.is_vip ? "−ViP" : "+ViP"}
+                          </button>
+                        )}
+                        <button onClick={() => toggleBan(u.username, u.is_banned)} disabled={banActionLoading === u.username}
+                          className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all active:scale-95 disabled:opacity-50 ${u.is_banned ? "bg-green-50 text-green-600 hover:bg-green-100" : "bg-red-50 text-red-500 hover:bg-red-100"}`}>
+                          {banActionLoading === u.username
+                            ? <Icon name="Loader2" size={11} className="animate-spin" />
+                            : u.is_banned ? "Разбан" : "Бан"}
+                        </button>
+                      </div>
                     )}
                   </div>
                 ))}
@@ -370,6 +479,54 @@ export default function Admin() {
                   <div className={`flex items-center gap-2 px-4 py-3 rounded-xl text-sm ${rightsResult.ok ? "bg-green-50 text-green-700" : "bg-red-50 text-red-600"}`}>
                     <Icon name={rightsResult.ok ? "CheckCircle" : "AlertCircle"} size={16} />
                     {rightsResult.message}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* VIP management — owner only */}
+            {isOwner && (
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex flex-col gap-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm">👑</span>
+                  <span className="font-semibold text-gray-800 text-sm">Управление ViP</span>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs text-gray-500 font-medium">Юзернейм</label>
+                  <input
+                    value={vipTarget}
+                    onChange={(e) => setVipTarget(e.target.value)}
+                    placeholder="@юзернейм"
+                    className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all"
+                    style={{ outlineColor: "#FFD700" }}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <button onClick={() => setVipByInput(true)} disabled={vipLoading || !vipTarget.trim()}
+                    className="flex flex-col items-center gap-2 py-4 rounded-xl border-2 transition-all active:scale-95 disabled:opacity-50"
+                    style={{ borderColor: "#FFD700", background: "linear-gradient(135deg, #FFF9E6, #FFFBE8)" }}>
+                    <span className="text-2xl">👑</span>
+                    <div>
+                      <p className="text-sm font-bold" style={{ color: "#B8860B" }}>Выдать ViP</p>
+                      <p className="text-xs text-gray-400">Привилегия</p>
+                    </div>
+                  </button>
+                  <button onClick={() => setVipByInput(false)} disabled={vipLoading || !vipTarget.trim()}
+                    className="flex flex-col items-center gap-2 py-4 rounded-xl border-2 border-gray-200 hover:border-gray-400 hover:bg-gray-50 transition-all active:scale-95 disabled:opacity-50">
+                    <Icon name="X" size={20} className="text-gray-400" />
+                    <div>
+                      <p className="text-sm font-semibold text-gray-700">Снять ViP</p>
+                      <p className="text-xs text-gray-400">Обычный аккаунт</p>
+                    </div>
+                  </button>
+                </div>
+                {vipLoading && (
+                  <div className="flex justify-center"><Icon name="Loader2" size={20} className="animate-spin text-gray-400" /></div>
+                )}
+                {vipResult && (
+                  <div className={`flex items-center gap-2 px-4 py-3 rounded-xl text-sm ${vipResult.ok ? "bg-green-50 text-green-700" : "bg-red-50 text-red-600"}`}>
+                    <Icon name={vipResult.ok ? "CheckCircle" : "AlertCircle"} size={16} />
+                    {vipResult.message}
                   </div>
                 )}
               </div>
