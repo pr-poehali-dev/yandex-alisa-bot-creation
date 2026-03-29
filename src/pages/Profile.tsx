@@ -775,6 +775,9 @@ export default function Profile() {
                       <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-bold tracking-wide"
                         style={{ background: "linear-gradient(135deg, #FFD700, #FFA500)", color: "#000" }}>ViP</span>
                     )}
+                    {profile.username === "lavroviylist" && (
+                      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[10px] font-bold tracking-wide bg-green-500 text-white">✓</span>
+                    )}
                   </div>
                   {profile.username && (
                     <div className="flex items-center gap-1.5">
