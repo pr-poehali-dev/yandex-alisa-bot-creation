@@ -416,13 +416,13 @@ export default function Admin() {
                     </div>
                     {u.username !== me && (
                       <div className="flex items-center gap-1.5 flex-shrink-0">
-                        {isOwner && (
+                        {isOwner && !u.is_vip && (
                           <button onClick={() => toggleVip(u.username, !!u.is_vip)} disabled={vipActionLoading === u.username}
                             className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-all active:scale-95 disabled:opacity-50`}
-                            style={u.is_vip ? { background: "#f3f4f6", color: "#6b7280" } : { background: "linear-gradient(135deg, #FFD700, #FFA500)", color: "#000" }}>
+                            style={{ background: "linear-gradient(135deg, #FFD700, #FFA500)", color: "#000" }}>
                             {vipActionLoading === u.username
                               ? <Icon name="Loader2" size={10} className="animate-spin" />
-                              : u.is_vip ? "−ViP" : "+ViP"}
+                              : "+ViP"}
                           </button>
                         )}
                         <button onClick={() => toggleBan(u.username, u.is_banned)} disabled={banActionLoading === u.username}
