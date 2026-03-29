@@ -5,7 +5,7 @@ import urllib.error
 
 
 def handler(event: dict, context) -> dict:
-    """Отвечает на любое сообщение пользователя через Groq API."""
+    """Отвечает на любое сообщение пользователя через Google Gemini."""
     if event.get('httpMethod') == 'OPTIONS':
         return {
             'statusCode': 200,
@@ -29,47 +29,45 @@ def handler(event: dict, context) -> dict:
             'body': json.dumps({'error': 'message is required'})
         }
 
-    api_key = os.environ.get('GROQ_API_KEY', '').strip()
+    api_key = os.environ.get('GEMINI_API_KEY', '').strip()
     api_key = ''.join(c for c in api_key if ord(c) < 128)
 
-    messages = [
-        {
-            'role': 'system',
-            'content': (
+    contents = []
+    for msg in history[-10:]:
+        role = msg.get('role')
+        if role == 'user':
+            contents.append({'role': 'user', 'parts': [{'text': msg['content']}]})
+        elif role == 'assistant':
+            contents.append({'role': 'model', 'parts': [{'text': msg['content']}]})
+    contents.append({'role': 'user', 'parts': [{'text': message}]})
+
+    payload = json.dumps({
+        'system_instruction': {
+            'parts': [{'text': (
                 'Ты Семицвет AI 2.0 — умный и дружелюбный помощник. '
                 'Отвечай на русском языке, кратко и по делу. '
                 'Ты создан разработчиком Lavrov1yList.'
-            )
-        }
-    ]
-
-    for msg in history[-10:]:
-        if msg.get('role') in ('user', 'assistant'):
-            messages.append({'role': msg['role'], 'content': msg['content']})
-
-    messages.append({'role': 'user', 'content': message})
-
-    payload = json.dumps({
-        'model': 'llama-3.3-70b-versatile',
-        'messages': messages,
-        'max_tokens': 500,
-        'temperature': 0.7
+            )}]
+        },
+        'contents': contents,
+        'generationConfig': {'maxOutputTokens': 500, 'temperature': 0.7}
     }).encode('utf-8')
 
-    req = urllib.request.Request(
-        'https://api.groq.com/openai/v1/chat/completions',
-        data=payload,
-        headers={
-            'Content-Type': 'application/json',
-            'Authorization': f'Bearer {api_key}'
-        },
-        method='POST'
-    )
+    url = f'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}'
+    req = urllib.request.Request(url, data=payload, headers={'Content-Type': 'application/json'}, method='POST')
 
-    with urllib.request.urlopen(req) as resp:
-        result = json.loads(resp.read())
-
-    reply = result['choices'][0]['message']['content']
+    try:
+        with urllib.request.urlopen(req) as resp:
+            result = json.loads(resp.read())
+        reply = result['candidates'][0]['content']['parts'][0]['text']
+    except urllib.error.HTTPError as e:
+        error_body = e.read().decode('utf-8')
+        print(f'[Gemini ERROR] status={e.code} body={error_body}')
+        return {
+            'statusCode': 200,
+            'headers': {'Access-Control-Allow-Origin': '*'},
+            'body': json.dumps({'reply': f'Ошибка {e.code}: {error_body}'})
+        }
 
     return {
         'statusCode': 200,
