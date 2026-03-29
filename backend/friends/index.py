@@ -167,11 +167,11 @@ def handler(event: dict, context) -> dict:
             token = body.get("token", "")
             if not username or not token:
                 return resp(400, {"error": "Неверные данные"})
-            cur.execute("SELECT username, name, bio, avatar, email, two_fa_enabled, is_banned FROM users WHERE username=%s AND session_token=%s", (username, token))
+            cur.execute("SELECT username, name, bio, avatar, email, two_fa_enabled, is_banned, role FROM users WHERE username=%s AND session_token=%s", (username, token))
             row = cur.fetchone()
             if not row:
                 return resp(401, {"error": "Сессия недействительна"})
-            return resp(200, {"ok": True, "username": row[0], "name": row[1], "bio": row[2], "avatar": row[3], "email": row[4], "two_fa": row[5], "banned": bool(row[6])})
+            return resp(200, {"ok": True, "username": row[0], "name": row[1], "bio": row[2], "avatar": row[3], "email": row[4], "two_fa": row[5], "banned": bool(row[6]), "role": row[7]})
 
         # ── Send email verification code (for connecting email) ──
         if action == "send_connect_email_code" and method == "POST":
@@ -496,9 +496,9 @@ def handler(event: dict, context) -> dict:
             row = cur.fetchone()
             if not row or row[0] != token:
                 return resp(401, {"error": "Неверный токен"})
-            cur.execute("SELECT username, name, avatar, is_banned FROM users ORDER BY username")
+            cur.execute("SELECT username, name, avatar, is_banned, role FROM users ORDER BY username")
             rows = cur.fetchall()
-            return resp(200, {"users": [{"username": r[0], "name": r[1], "avatar": r[2], "is_banned": r[3]} for r in rows]})
+            return resp(200, {"users": [{"username": r[0], "name": r[1], "avatar": r[2], "is_banned": r[3], "role": r[4]} for r in rows]})
 
         # ── Admin get banned list ──
         if action == "get_banned_list" and method == "POST":
@@ -506,12 +506,12 @@ def handler(event: dict, context) -> dict:
             token = body.get("token", "").strip()
             if not admin or not token:
                 return resp(400, {"error": "Неверные данные"})
-            if admin != "lavroviylist":
-                return resp(403, {"error": "Нет доступа"})
-            cur.execute("SELECT session_token FROM users WHERE username=%s", (admin,))
+            cur.execute("SELECT session_token, role FROM users WHERE username=%s", (admin,))
             row = cur.fetchone()
             if not row or row[0] != token:
                 return resp(401, {"error": "Неверный токен"})
+            if admin != "lavroviylist" and row[1] not in ("moderator",):
+                return resp(403, {"error": "Нет доступа"})
             cur.execute("SELECT username, name, avatar FROM users WHERE is_banned=TRUE ORDER BY username")
             rows = cur.fetchall()
             return resp(200, {"banned": [{"username": r[0], "name": r[1], "avatar": r[2]} for r in rows]})
@@ -523,6 +523,28 @@ def handler(event: dict, context) -> dict:
             target = body.get("target_username", "").strip().lower()
             if not admin or not token or not target:
                 return resp(400, {"error": "Неверные данные"})
+            cur.execute("SELECT session_token, role FROM users WHERE username=%s", (admin,))
+            row = cur.fetchone()
+            if not row or row[0] != token:
+                return resp(401, {"error": "Неверный токен"})
+            if admin != "lavroviylist" and row[1] not in ("moderator",):
+                return resp(403, {"error": "Нет доступа"})
+            cur.execute("SELECT id FROM users WHERE username=%s", (target,))
+            if not cur.fetchone():
+                return resp(404, {"error": "Пользователь не найден"})
+            ban_val = action == "admin_ban"
+            cur.execute("UPDATE users SET is_banned=%s WHERE username=%s", (ban_val, target))
+            conn.commit()
+            return resp(200, {"ok": True})
+
+        # ── Admin set role ──
+        if action == "set_role" and method == "POST":
+            admin = body.get("admin_username", "").strip().lower()
+            token = body.get("token", "").strip()
+            target = body.get("target_username", "").strip().lower()
+            role = body.get("role", "").strip()
+            if not admin or not token or not target or role not in ("member", "moderator"):
+                return resp(400, {"error": "Неверные данные"})
             if admin != "lavroviylist":
                 return resp(403, {"error": "Нет доступа"})
             cur.execute("SELECT session_token FROM users WHERE username=%s", (admin,))
@@ -532,8 +554,7 @@ def handler(event: dict, context) -> dict:
             cur.execute("SELECT id FROM users WHERE username=%s", (target,))
             if not cur.fetchone():
                 return resp(404, {"error": "Пользователь не найден"})
-            ban_val = action == "admin_ban"
-            cur.execute("UPDATE users SET is_banned=%s WHERE username=%s", (ban_val, target))
+            cur.execute("UPDATE users SET role=%s WHERE username=%s", (role, target))
             conn.commit()
             return resp(200, {"ok": True})
 

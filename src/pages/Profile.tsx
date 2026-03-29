@@ -96,7 +96,7 @@ export default function Profile() {
   }, []);
 
   // ── session: { username, token }
-  const [session, setSession] = useState<{ username: string; token: string } | null>(() => {
+  const [session, setSession] = useState<{ username: string; token: string; role?: string } | null>(() => {
     try { return JSON.parse(localStorage.getItem(SESSION_KEY) || "null"); } catch { return null; }
   });
 
@@ -242,6 +242,7 @@ export default function Profile() {
       if (!data.ok) { setSession(null); setProfile(defaultProfile); }
       else {
         if (data.banned) { setIsBanned(true); return; }
+        setSession((s) => s ? { ...s, role: data.role || "member" } : s);
         setProfile({ name: data.name, username: data.username, bio: data.bio || "", avatar: data.avatar });
         setProfileEmail(data.email || null);
         setProfileTwoFa(!!data.two_fa);
