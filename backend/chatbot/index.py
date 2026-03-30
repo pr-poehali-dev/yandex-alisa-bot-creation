@@ -5,7 +5,7 @@ import urllib.error
 
 
 def handler(event: dict, context) -> dict:
-    """Отвечает на сообщения пользователя через Groq API. v3"""
+    """Отвечает на сообщения пользователя через OpenRouter API. v4"""
     if event.get('httpMethod') == 'OPTIONS':
         return {
             'statusCode': 200,
@@ -47,17 +47,17 @@ def handler(event: dict, context) -> dict:
 
     messages.append({'role': 'user', 'content': message})
 
-    api_key = ''.join(c for c in os.environ.get('GROQ_API_KEY', '') if ord(c) < 128).strip()
+    api_key = os.environ.get('OPENROUTER_API_KEY', '').strip()
 
     payload = json.dumps({
-        'model': 'llama-3.3-70b-versatile',
+        'model': 'meta-llama/llama-3.3-70b-instruct',
         'messages': messages,
         'max_tokens': 500,
         'temperature': 0.7
     }).encode('utf-8')
 
     req = urllib.request.Request(
-        'https://api.groq.com/openai/v1/chat/completions',
+        'https://openrouter.ai/api/v1/chat/completions',
         data=payload,
         headers={
             'Content-Type': 'application/json',
@@ -72,7 +72,7 @@ def handler(event: dict, context) -> dict:
         reply = result['choices'][0]['message']['content']
     except urllib.error.HTTPError as e:
         error_body = e.read().decode('utf-8')
-        print(f'[Groq ERROR] status={e.code} body={error_body}')
+        print(f'[OpenRouter ERROR] status={e.code} body={error_body}')
         reply = 'Извини, не могу ответить прямо сейчас. Попробуй чуть позже.'
 
     return {
