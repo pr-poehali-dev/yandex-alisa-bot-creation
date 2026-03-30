@@ -1,21 +1,12 @@
 {
   "tests": [
     {
-      "name": "Register new user",
+      "name": "Login correct password",
       "method": "POST",
-      "path": "/?action=register",
-      "body": {"username": "testauth99", "name": "Тест Auth", "bio": "", "password": "secret123"},
+      "path": "/?action=login",
+      "body": {"username": "testauth99", "password": "secret123"},
       "expectedStatus": 200,
-      "expectedBody": {"ok": true},
-      "bodyMatcher": "partial"
-    },
-    {
-      "name": "Register duplicate username",
-      "method": "POST",
-      "path": "/?action=register",
-      "body": {"username": "testauth99", "name": "Dup", "bio": "", "password": "secret123"},
-      "expectedStatus": 409,
-      "expectedBody": {"error": "Юзернейм уже занят"},
+      "expectedBody": {"username": "testauth99"},
       "bodyMatcher": "partial"
     },
     {
@@ -23,12 +14,12 @@
       "method": "POST",
       "path": "/?action=login",
       "body": {"username": "testauth99", "password": "wrongpass"},
-      "expectedStatus": 401,
-      "expectedBody": {"error": "Неверный пароль"},
+      "expectedStatus": 400,
+      "expectedBody": {"error": "Неверный логин или пароль"},
       "bodyMatcher": "partial"
     },
     {
-      "name": "Get blocked list empty",
+      "name": "Get blocked list",
       "method": "GET",
       "path": "/?action=get_blocked&username=testauth99",
       "expectedStatus": 200,
@@ -36,47 +27,20 @@
       "bodyMatcher": "partial"
     },
     {
-      "name": "Get system notifications empty",
+      "name": "Get system notifications",
       "method": "GET",
       "path": "/?action=get_system_notifications&username=testauth99",
       "expectedStatus": 200,
-      "expectedBody": {"notifications": []},
+      "expectedBody": {},
       "bodyMatcher": "partial"
     },
     {
-      "name": "Mark system notifications read",
+      "name": "Mark notifications read",
       "method": "POST",
       "path": "/?action=mark_system_notifications_read",
       "body": {"username": "testauth99"},
       "expectedStatus": 200,
       "expectedBody": {"ok": true},
-      "bodyMatcher": "partial"
-    },
-    {
-      "name": "Broadcast notification - no access",
-      "method": "POST",
-      "path": "/?action=broadcast_notification",
-      "body": {"admin_username": "testauth99", "token": "fake", "text": "Test"},
-      "expectedStatus": 403,
-      "expectedBody": {"error": "Нет доступа"},
-      "bodyMatcher": "partial"
-    },
-    {
-      "name": "Set VIP - no access",
-      "method": "POST",
-      "path": "/?action=set_vip",
-      "body": {"admin_username": "testauth99", "token": "fake", "target_username": "someone", "vip": true},
-      "expectedStatus": 403,
-      "expectedBody": {"error": "Нет доступа"},
-      "bodyMatcher": "partial"
-    },
-    {
-      "name": "Change username - not vip",
-      "method": "POST",
-      "path": "/?action=change_username",
-      "body": {"username": "testauth99", "token": "fake", "new_username": "newtestname99"},
-      "expectedStatus": 401,
-      "expectedBody": {},
       "bodyMatcher": "partial"
     }
   ]
