@@ -47,7 +47,7 @@ def handler(event: dict, context) -> dict:
 
     messages.append({'role': 'user', 'content': message})
 
-    api_key = os.environ.get('OPENROUTER_API_KEY', '').strip()
+    api_key = ''.join(c for c in os.environ.get('OPENROUTER_API_KEY', '') if ord(c) < 128).strip()
 
     payload = json.dumps({
         'model': 'mistralai/mistral-7b-instruct:free',
@@ -63,7 +63,7 @@ def handler(event: dict, context) -> dict:
             'Content-Type': 'application/json',
             'Authorization': f'Bearer {api_key}',
             'HTTP-Referer': 'https://poehali.dev',
-            'X-Title': 'Семицвет AI'
+            'X-Title': 'Semitsvet AI'
         },
         method='POST'
     )
