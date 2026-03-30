@@ -5,7 +5,7 @@ import urllib.error
 
 
 def handler(event: dict, context) -> dict:
-    """Отвечает на любое сообщение пользователя через Google Gemini."""
+    """Отвечает на любое сообщение пользователя через OpenRouter (бесплатные модели)."""
     if event.get('httpMethod') == 'OPTIONS':
         return {
             'statusCode': 200,
@@ -29,45 +29,53 @@ def handler(event: dict, context) -> dict:
             'body': json.dumps({'error': 'message is required'})
         }
 
-    api_key = os.environ.get('GEMINI_API_KEY', '').strip()
-    api_key = ''.join(c for c in api_key if ord(c) < 128)
-
-    contents = []
-    for msg in history[-10:]:
-        role = msg.get('role')
-        if role == 'user':
-            contents.append({'role': 'user', 'parts': [{'text': msg['content']}]})
-        elif role == 'assistant':
-            contents.append({'role': 'model', 'parts': [{'text': msg['content']}]})
-    contents.append({'role': 'user', 'parts': [{'text': message}]})
-
-    payload = json.dumps({
-        'system_instruction': {
-            'parts': [{'text': (
+    messages = [
+        {
+            'role': 'system',
+            'content': (
                 'Ты Семицвет AI 2.0 — умный и дружелюбный помощник. '
                 'Отвечай на русском языке, кратко и по делу. '
                 'Ты создан разработчиком Lavrov1yList.'
-            )}]
-        },
-        'contents': contents,
-        'generationConfig': {'maxOutputTokens': 500, 'temperature': 0.7}
+            )
+        }
+    ]
+
+    for msg in history[-10:]:
+        role = msg.get('role')
+        if role in ('user', 'assistant'):
+            messages.append({'role': role, 'content': msg['content']})
+
+    messages.append({'role': 'user', 'content': message})
+
+    api_key = os.environ.get('OPENROUTER_API_KEY', '').strip()
+
+    payload = json.dumps({
+        'model': 'mistralai/mistral-7b-instruct:free',
+        'messages': messages,
+        'max_tokens': 500,
+        'temperature': 0.7
     }).encode('utf-8')
 
-    url = f'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}'
-    req = urllib.request.Request(url, data=payload, headers={'Content-Type': 'application/json'}, method='POST')
+    req = urllib.request.Request(
+        'https://openrouter.ai/api/v1/chat/completions',
+        data=payload,
+        headers={
+            'Content-Type': 'application/json',
+            'Authorization': f'Bearer {api_key}',
+            'HTTP-Referer': 'https://poehali.dev',
+            'X-Title': 'Семицвет AI'
+        },
+        method='POST'
+    )
 
     try:
         with urllib.request.urlopen(req) as resp:
             result = json.loads(resp.read())
-        reply = result['candidates'][0]['content']['parts'][0]['text']
+        reply = result['choices'][0]['message']['content']
     except urllib.error.HTTPError as e:
         error_body = e.read().decode('utf-8')
-        print(f'[Gemini ERROR] status={e.code} body={error_body}')
-        return {
-            'statusCode': 200,
-            'headers': {'Access-Control-Allow-Origin': '*'},
-            'body': json.dumps({'reply': f'Ошибка {e.code}: {error_body}'})
-        }
+        print(f'[OpenRouter ERROR] status={e.code} body={error_body}')
+        reply = 'Извини, не могу ответить прямо сейчас. Попробуй чуть позже.'
 
     return {
         'statusCode': 200,
