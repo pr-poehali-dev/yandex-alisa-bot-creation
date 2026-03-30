@@ -118,31 +118,10 @@ export default function Index() {
     setShowSuggestions(false);
 
     try {
-      const history = messages.map((m) => ({
-        role: m.role === "bot" ? "assistant" : "user",
-        content: m.text,
-      }));
-
-      const res = await fetch(CHATBOT_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text.trim(), history }),
-      });
-
-      const data = await res.json();
-      const reply = data.reply || "Не смог получить ответ, попробуйте ещё раз.";
-
       setMessages((prev) => [...prev, {
         id: Date.now() + 1,
         role: "bot",
-        text: reply,
-        time: getTime(),
-      }]);
-    } catch {
-      setMessages((prev) => [...prev, {
-        id: Date.now() + 1,
-        role: "bot",
-        text: "Ошибка соединения, попробуйте позже.",
+        text: "Привет! Я пока не подключён к ИИ. Напиши мне позже.",
         time: getTime(),
       }]);
     } finally {
