@@ -5,7 +5,7 @@ import urllib.error
 
 
 def handler(event: dict, context) -> dict:
-    """Отвечает на сообщения пользователя через Groq API."""
+    """Отвечает на сообщения пользователя через Groq API. v2"""
     if event.get('httpMethod') == 'OPTIONS':
         return {
             'statusCode': 200,
