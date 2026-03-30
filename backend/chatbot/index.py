@@ -50,7 +50,7 @@ def handler(event: dict, context) -> dict:
     api_key = ''.join(c for c in os.environ.get('OPENROUTER_API_KEY', '') if ord(c) < 128).strip()
 
     payload = json.dumps({
-        'model': 'mistralai/mistral-7b-instruct:free',
+        'model': 'meta-llama/llama-3.3-70b-instruct:free',
         'messages': messages,
         'max_tokens': 500,
         'temperature': 0.7
